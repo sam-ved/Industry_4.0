@@ -50,7 +50,7 @@ export default function EnergyAnalytics() {
         setInsightsLoading(true)
         setInsightsError('')
         try {
-          const res = await llmAPI.explain('energy', results as Record<string, unknown>)
+          const res = await llmAPI.explain('energy', results as unknown as Record<string, unknown>)
           setInsights(res.explanation)
         } catch (err) {
           setInsightsError('Failed to load AI Insights.')

@@ -58,7 +58,7 @@ export default function PPEMonitoring() {
         setInsightsLoading(true)
         setInsightsError('')
         try {
-          const res = await llmAPI.explain('ppe', results as Record<string, unknown>)
+          const res = await llmAPI.explain('ppe', results as unknown as Record<string, unknown>)
           setInsights(res.explanation)
         } catch (err) {
           setInsightsError('Failed to load AI Insights.')
