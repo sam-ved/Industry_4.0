@@ -1,0 +1,20 @@
+﻿# --- Python Backend Ignores ---
+backend/venv/
+backend/env/
+**/__pycache__/
+**/*.pyc
+backend/.env
+
+# --- Node.js Frontend Ignores ---
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env
+
+venv/
+.venv/
+
+backend/models/rf_model.pkl
+venv/
+.venv/
+**/venv/
