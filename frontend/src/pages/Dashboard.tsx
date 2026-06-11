@@ -4,7 +4,7 @@ import {
   Zap, Shield, TrendingUp, Gauge,
   AlertTriangle, CheckCircle, Activity,
   ArrowUpRight, ArrowDownRight, ChevronRight,
-  Bell, Cpu, Radio, RefreshCw, WifiOff,
+  Bell, Cpu, Radio, RefreshCw, WifiOff, Beaker
 } from 'lucide-react'
 import BackgroundGlow from '../components/common/BackgroundGlow'
 import { useDashboard } from '../hooks/useDashboard'
@@ -321,6 +321,16 @@ export default function Dashboard() {
       path: '/predictive-maintenance',
       metric: kpis ? `${kpis.fleet_avg_rul}h RUL` : '...',
       metricLabel: 'avg. remaining',
+    },
+    {
+      icon: Beaker,
+      title: 'AutoML Studio',
+      description: 'Upload datasets, engineer features, and train custom machine learning models interactively.',
+      accent: 'orange',
+      status: 'Active',
+      path: '/ml-studio',
+      metric: 'Ready',
+      metricLabel: 'to train',
     },
   ]
 

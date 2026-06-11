@@ -6,6 +6,7 @@ import PPEMonitoring from './pages/PPEMonitoring'
 import EnergyAnalytics from './pages/EnergyAnalytics'
 import PredictiveMaintenance from './pages/PredictiveMaintenance'
 import ModelsHub from './pages/ModelsHub'
+import MLStudio from './pages/MLStudio'
 import './App.css'
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
 
         {/* Models Hub */}
         <Route path="/models" element={<ModelsHub />} />
+        <Route path="/ml-studio" element={<MLStudio />} />
 
         {/* Catch-all redirect */}
         <Route path="*" element={<Navigate to="/" replace />} />

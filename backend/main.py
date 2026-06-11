@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 import os
 
-from routers import defect, ppe, energy, maintenance, llm, models
+from routers import defect, ppe, energy, maintenance, llm, models, ml_studio
 from database import init_db
 from services.defect_service import run_defect_detection
 from services.ppe_service import run_ppe_detection
@@ -46,6 +46,7 @@ app.include_router(energy.router)
 app.include_router(maintenance.router)
 app.include_router(llm.router)
 app.include_router(models.router)
+app.include_router(ml_studio.router)
 
 
 @app.get("/")

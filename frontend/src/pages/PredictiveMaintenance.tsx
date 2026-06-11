@@ -11,7 +11,6 @@ import {
   BarChart3,
   AlertCircle,
   AlertTriangle,
-  Sparkles,
 } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
 import { llmAPI, maintenanceAPI } from '../services/api'
@@ -64,7 +63,7 @@ export default function PredictiveMaintenance() {
         setInsightsLoading(true)
         setInsightsError('')
         try {
-          const res = await llmAPI.explain('maintenance', results as Record<string, unknown>)
+          const res = await llmAPI.explain('maintenance', results as unknown as Record<string, unknown>)
           setInsights(res.explanation)
         } catch (err) {
           setInsightsError('Failed to load AI Insights.')
