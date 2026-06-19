@@ -18,6 +18,8 @@ import { useBackendStatus } from '../hooks/useBackendStatus'
 import ModelInputHandler from '../components/ModelInputHandler'
 import BackgroundGlow from '../components/common/BackgroundGlow'
 import AIInsightsPanel from '../components/common/AIInsightsPanel'
+import AIChatDrawer from '../components/common/AIChatDrawer'
+import { Bot } from 'lucide-react'
 import { useEffect } from 'react'
 
 interface EnergyResult {
@@ -43,6 +45,7 @@ export default function EnergyAnalytics() {
   const [insights, setInsights] = useState(null)
   const [insightsLoading, setInsightsLoading] = useState(false)
   const [insightsError, setInsightsError] = useState('')
+  const [isChatOpen, setIsChatOpen] = useState(false)
 
   useEffect(() => {
     if (results) {
@@ -277,10 +280,38 @@ export default function EnergyAnalytics() {
                 )}
 
                 {/* AI Insights Panel */}
+                <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-800">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">AI explanation</h3>
+                    <p className="text-sm text-gray-400">
+                      The model provides insight into energy consumption anomalies and optimization recommendations.
+                    </p>
+                  </div>
+                  <div className="flex gap-3 items-center">
+                    <div className="inline-flex rounded-2xl bg-cyan-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">
+                      Insight
+                    </div>
+                    <button 
+                      onClick={() => setIsChatOpen(true)}
+                      disabled={!results}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 disabled:bg-slate-800 disabled:text-slate-500 text-white font-semibold rounded-lg shadow transition-colors"
+                    >
+                      <Bot size={16} /> Ask AI
+                    </button>
+                  </div>
+                </div>
+
                 <AIInsightsPanel 
                   isLoading={insightsLoading} 
                   insights={insights} 
                   error={insightsError} 
+                />
+
+                <AIChatDrawer 
+                  isOpen={isChatOpen}
+                  onClose={() => setIsChatOpen(false)}
+                  module="energy"
+                  contextData={results}
                 />
 
                 <button

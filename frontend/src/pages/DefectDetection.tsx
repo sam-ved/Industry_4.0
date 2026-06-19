@@ -18,6 +18,8 @@ import { useEffect } from 'react'
 
 import UploadDropzone from '../components/common/UploadDropzone'
 import AIInsightsPanel from '../components/common/AIInsightsPanel'
+import AIChatDrawer from '../components/common/AIChatDrawer'
+import { Bot } from 'lucide-react'
 
 interface Detection {
   bbox: [number, number, number, number];
@@ -136,6 +138,7 @@ export default function DefectDetection() {
   const [insights, setInsights] = useState(null)
   const [insightsLoading, setInsightsLoading] = useState(false)
   const [insightsError, setInsightsError] = useState('')
+  const [isChatOpen, setIsChatOpen] = useState(false)
 
   useEffect(() => {
     if (activeImage?.result) {
@@ -360,8 +363,17 @@ export default function DefectDetection() {
                     The model provides insight into why defects were detected and how severe they are.
                   </p>
                 </div>
-                <div className="inline-flex rounded-2xl bg-cyan-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">
-                  Insight
+                <div className="flex gap-3 items-center">
+                  <div className="inline-flex rounded-2xl bg-cyan-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">
+                    Insight
+                  </div>
+                  <button 
+                    onClick={() => setIsChatOpen(true)}
+                    disabled={!activeImage?.result}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 disabled:bg-slate-800 disabled:text-slate-500 text-white font-semibold rounded-lg shadow transition-colors"
+                  >
+                    <Bot size={16} /> Ask AI
+                  </button>
                 </div>
               </div>
 
@@ -385,6 +397,13 @@ export default function DefectDetection() {
                 />
               )}
             </Card>
+
+            <AIChatDrawer 
+              isOpen={isChatOpen}
+              onClose={() => setIsChatOpen(false)}
+              module="steel"
+              contextData={activeImage?.result}
+            />
 
             <Card className="p-6">
               <div className="flex items-center justify-between gap-4">

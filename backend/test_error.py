@@ -1,6 +1,6 @@
 import sys
 sys.path.append('.')
-from services.model_service import analyze_with_model
+from backend.services.model_service import analyze_with_model
 import pandas as pd
 import io
 

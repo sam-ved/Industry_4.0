@@ -1,11 +1,11 @@
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 def get_seeded_random():
     # Seeds the random generator to the current minute so values stay stable 
     # across multiple API requests in the same minute, avoiding flickering.
-    return random.Random(datetime.utcnow().strftime("%Y-%m-%d %H:%M"))
+    return random.Random(datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"))
 
 def get_defect_mock():
     r = get_seeded_random()
@@ -20,7 +20,7 @@ def get_defect_mock():
     ] if detected != "none" else None
     severity = r.choice(["low", "medium", "high"]) if detected != "none" else None
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "defect_detected": detected != "none",
         "defect_type": detected if detected != "none" else None,
         "confidence": confidence,
@@ -71,7 +71,7 @@ def get_ppe_mock():
         "missing_equipment": missing,
         "processing_time_ms": r.randint(100, 500),
         "llm_insights": "Workers are mostly compliant, but some are missing equipment." if missing else "All workers are compliant.",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "total_workers": total,
         "compliant_count": compliant_count,
         "violation_count": total - compliant_count,
@@ -81,7 +81,7 @@ def get_ppe_mock():
 
 def get_energy_mock():
     r = get_seeded_random()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     hourly = []
     base = 380
     for i in range(24):
@@ -94,7 +94,7 @@ def get_energy_mock():
     total_kwh = sum(h["kwh"] for h in hourly)
     total_co2 = sum(h["co2_kg"] for h in hourly)
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "total_kwh_today": round(total_kwh, 1),
         "total_co2_kg": round(total_co2, 2),
         "current_kwh": hourly[-1]["kwh"],
@@ -135,7 +135,7 @@ def get_maintenance_mock():
             "vibration_mm_s": vibration,
             "temperature_c": temp,
             "status": "critical" if rul < 72 else "warning" if rul < 168 else "healthy",
-            "maintenance_due": (datetime.utcnow() + timedelta(hours=rul)).strftime("%Y-%m-%d %H:%M"),
+            "maintenance_due": (datetime.now(timezone.utc) + timedelta(hours=rul)).strftime("%Y-%m-%d %H:%M"),
             "anomaly_detected": vibration > 3.5 or temp > 85,
         })
     avg_rul = round(sum(res["rul_hours"] for res in results) / len(results), 1)
@@ -165,7 +165,7 @@ def get_maintenance_mock():
         })
 
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "machines": results,
         "fleet_avg_rul": avg_rul,
         "fleet_avg_health": avg_health,
@@ -183,7 +183,7 @@ def get_maintenance_mock():
 def get_dashboard_summary(defect, ppe, energy, maintenance):
     """Aggregated snapshot for the main dashboard KPIs."""
     return {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "kpis": {
             "total_defects_today": defect["total_defects_today"],
             "defect_rate_pct": defect["defect_rate_pct"],

@@ -1,7 +1,6 @@
 from typing import Optional
-# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, UploadFile, File
-from services.defect_service import run_defect_detection
+from backend.services.defect_service import run_defect_detection
 
 router = APIRouter(prefix="/api/defect", tags=["Defect Detection"])
 

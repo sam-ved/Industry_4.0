@@ -59,8 +59,8 @@ def init_db():
     conn.close()
     print("[Database] Initialized successfully")
 
-def add_analysis_record(model_id: str, model_name: str, file_name: str, status: str, 
-                       execution_time_ms: float, model_version: str, results_json: str = None):
+def add_analysis_record(model_id: str | None, model_name: str, file_name: str, status: str, 
+                       execution_time_ms: float, model_version: str, results_json: str | None = None):
     """Add analysis record to database"""
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -88,7 +88,7 @@ def add_analysis_record(model_id: str, model_name: str, file_name: str, status: 
         print(f"[Database] Error adding record: {e}")
         return False
 
-def get_analysis_history(limit: int = 50, model_id: str = None) -> List[Dict]:
+def get_analysis_history(limit: int = 50, model_id: str | None = None) -> List[Dict]:
     """Get analysis history from database"""
     try:
         conn = sqlite3.connect(DB_PATH)
@@ -229,7 +229,7 @@ def log_ai_insight(module: str, prediction_data: str, llm_response: str):
         print(f"[Database] AI Insight logging error: {e}")
         return False
 
-def get_ai_insights(module: str = None, limit: int = 50) -> List[Dict]:
+def get_ai_insights(module: str | None = None, limit: int = 50) -> List[Dict]:
     """Retrieve AI insight history"""
     try:
         conn = sqlite3.connect(DB_PATH)

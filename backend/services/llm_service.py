@@ -1,12 +1,14 @@
+from backend.database import get_cache, set_cache, log_ai_insight
 import logging
 import os
+import sys
 import json
 import hashlib
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 
-from database import get_cache, set_cache, log_ai_insight
+# Add backend directory to sys.path to allow direct execution
 
 load_dotenv()
 
@@ -24,8 +26,9 @@ INDUSTRIAL_PERSONA = (
     "Return ONLY a valid JSON object matching the exact requested keys, without markdown fences or additional text."
 )
 
-async def _call_claude_async(system_prompt: str, user_prompt: str) -> dict:
-    """Core Claude call — always returns structured JSON."""
+
+async def _call_gemini_async(system_prompt: str, user_prompt: str) -> dict:
+    """Core Gemini call — always returns structured JSON."""
     try:
         response = await client.aio.models.generate_content(
             model=MODEL,
@@ -35,7 +38,7 @@ async def _call_claude_async(system_prompt: str, user_prompt: str) -> dict:
                 response_mime_type="application/json",
             )
         )
-        raw = response.text
+        raw = response.text or ""
         # Strip markdown fences if present
         raw = raw.strip()
         if raw.startswith("```"):
@@ -44,13 +47,13 @@ async def _call_claude_async(system_prompt: str, user_prompt: str) -> dict:
                 raw = raw[4:]
         return json.loads(raw.strip())
     except Exception as e:
-        print(f"[LLM Service Error] {str(e)}")
+        logger.error(f"[LLM Service Error] {str(e)}", exc_info=True)
         return {
-            "summary": "AI Analysis unavailable due to API error (e.g. insufficient credits).",
+            "summary": "AI Analysis unavailable due to API error.",
             "overall_status": "degraded",
-            "headline": "LLM Service Unavailable",
+            "headline": "AI Service Temporarily Unavailable",
             "key_alerts": [],
-            "top_recommended_actions": ["Check Anthropic API key and billing balance."],
+            "top_recommended_actions": ["Check Gemini API key, billing balance, and quota limit."],
             "positive_highlights": [],
             "system_health_score": 50,
             "severity_assessment": "unknown",
@@ -59,6 +62,7 @@ async def _call_claude_async(system_prompt: str, user_prompt: str) -> dict:
             "failure_risk": "unknown",
             "error": str(e)
         }
+
 
 def get_module_prompt(module: str, prediction: dict) -> str:
     if module == "steel":
@@ -122,6 +126,7 @@ Return a JSON object with these EXACT keys:
 - risk_level (string)
 """
 
+
 def generate_fallback_response(module: str, prediction: dict) -> dict:
     # Rule-based fallback if LLM API fails
     return {
@@ -132,16 +137,17 @@ def generate_fallback_response(module: str, prediction: dict) -> dict:
         "business_impact": "Monitor performance closely to prevent operational deviations."
     }
 
+
 async def explain_industrial_prediction(module: str, prediction: dict) -> dict:
     # 1. Cost Optimization: Check cache
     payload_str = json.dumps(prediction, sort_keys=True)
     cache_key = hashlib.md5(f"{module}_{payload_str}".encode()).hexdigest()
-    
+
     cached = get_cache("llm_explain", cache_key)
     if cached:
         try:
             return json.loads(cached)
-        except:
+        except Exception:
             pass
 
     # 2. Build Prompts
@@ -162,52 +168,61 @@ async def explain_industrial_prediction(module: str, prediction: dict) -> dict:
         )
         logger.info("Gemini Response")
         logger.info(response.text)
-        
-        raw = response.text.strip()
+
+        raw = (response.text or "").strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
-        
+
         response_data = json.loads(raw.strip())
-        
+
         # Validate keys
-        required_keys = ["summary", "root_cause", "recommendation", "risk_level", "business_impact"]
+        required_keys = ["summary", "root_cause",
+                         "recommendation", "risk_level", "business_impact"]
         for key in required_keys:
             if key not in response_data:
                 response_data[key] = "N/A"
-                
+
     except Exception as e:
-        print(f"[LLM Service Error] {str(e)}")
+        logger.error(f"[LLM Service Error] {str(e)}", exc_info=True)
         response_data = generate_fallback_response(module, prediction)
 
     # 4. Cache response
-    set_cache("llm_explain", module, cache_key, json.dumps(response_data), expires_minutes=60*24)
-    
+    set_cache("llm_explain", module, cache_key, json.dumps(
+        response_data), expires_minutes=60*24)
+
+    # 4.5 Save Global Context
+    global_context = {
+        "module": module,
+        "prediction": prediction
+    }
+    set_cache("global", "system", "latest_context",
+              json.dumps(global_context), expires_minutes=60*24)
+
     # 5. Log History
     log_ai_insight(module, payload_str, json.dumps(response_data))
 
     return response_data
 
-async def generate_dashboard_insights(summary: dict) -> dict:
-    """Master dashboard reasoning — aggregates all 4 modules into executive insights."""
-    system = (
+
+async def generate_dashboard_insights(context_data: dict) -> dict:
+    """Master dashboard reasoning — generates insights based on the latest module execution context."""
+    system_prompt = (
         "You are the AI brain of an Industry 4.0 control center. "
-        "Given a full system snapshot, generate an executive intelligence report. "
+        "Given the latest model execution context, generate an executive intelligence report for the main dashboard. "
         "Return ONLY a JSON object with these exact keys: "
-        "overall_status (string: optimal/normal/degraded/critical), "
-        "headline (string, 1 punchy sentence about the plant right now), "
-        "key_alerts (list of up to 3 objects each with: title, body, level where level is info/warning/critical), "
-        "top_recommended_actions (list of 3 strings in priority order), "
-        "positive_highlights (list of 2 strings — things going well), "
-        "system_health_score (integer 0-100)."
+        "executive_summary (string, a concise summary of the module's findings), "
+        "key_findings (list of 3 strings detailing the most important points), "
+        "recommendations (list of 3 strings with prioritized actionable advice)."
     )
-    user = f"Full system snapshot: {json.dumps(summary, indent=2)}"
-    return await _call_claude_async(system, user)
+    user_prompt = f"Latest model context: {json.dumps(context_data, indent=2)}"
+    return await _call_gemini_async(system_prompt, user_prompt)
+
 
 async def chat_with_context(context_data: dict, messages: list) -> str:
     """Conversational chat about a model's output context."""
-    system = (
+    system_prompt = (
         "You are an expert industrial AI analyst. Your job is to help users understand "
         "the AI model's output results and answer their questions about it. "
         "Provide clear, actionable, and concise responses. "
@@ -217,10 +232,12 @@ async def chat_with_context(context_data: dict, messages: list) -> str:
         gemini_messages = []
         for m in messages:
             if m["role"] == "user":
-                gemini_messages.append({"role": "user", "parts": [{"text": m["content"]}]})
+                gemini_messages.append(
+                    {"role": "user", "parts": [{"text": m["content"]}]})
             else:
-                gemini_messages.append({"role": "model", "parts": [{"text": m["content"]}]})
-                
+                gemini_messages.append(
+                    {"role": "model", "parts": [{"text": m["content"]}]})
+
         response = await client.aio.models.generate_content(
             model=MODEL,
             contents=gemini_messages,
@@ -228,7 +245,7 @@ async def chat_with_context(context_data: dict, messages: list) -> str:
                 system_instruction=system_prompt
             )
         )
-        return response.text
+        return response.text or ""
     except Exception as e:
-        print(f"[LLM Service Error] {str(e)}")
-        return "AI chat is currently unavailable. Please check your Anthropic API key and billing balance."
+        logger.error(f"[LLM Service Error] {str(e)}", exc_info=True)
+        return "AI chat is currently unavailable. Please check your Gemini API key and quota."

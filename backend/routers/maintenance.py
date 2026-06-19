@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File
-from services.maintenance_service import run_maintenance_analytics
+from backend.services.maintenance_service import run_maintenance_analytics
 
 router = APIRouter(prefix="/api/maintenance", tags=["Predictive Maintenance"])
 

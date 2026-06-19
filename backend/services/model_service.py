@@ -7,14 +7,15 @@ import json
 import numpy as np
 import pandas as pd
 from datetime import datetime
+from typing import Any
 
-from services.defect_service import run_defect_detection
-from services.ppe_service import run_ppe_detection
-from services.energy_service import run_energy_analytics
-from services.maintenance_service import run_maintenance_analytics
-from utils.model_loader import load_rul_model, load_alert_model, load_feature_scaler, load_label_encoders, preprocess_features
-from config.models_config import MODELS
-from database import add_analysis_record
+from backend.services.defect_service import run_defect_detection
+from backend.services.ppe_service import run_ppe_detection
+from backend.services.energy_service import run_energy_analytics
+from backend.services.maintenance_service import run_maintenance_analytics
+from backend.utils.model_loader import load_rul_model, load_alert_model, load_feature_scaler, load_label_encoders, preprocess_features
+from backend.config.models_config import MODELS
+from backend.database import add_analysis_record
 
 def analyze_with_model(model_id: str, file_content: bytes | None = None, file_name: str = "unknown") -> dict:
     """
@@ -38,7 +39,7 @@ def analyze_with_model(model_id: str, file_content: bytes | None = None, file_na
         }
     
     start_time = time.time()
-    result = {
+    result: dict[str, Any] = {
         "status": "processing",
         "model_id": model_id,
         "model_name": model_config["name"],
@@ -182,7 +183,7 @@ def _analyze_with_rul(csv_bytes: bytes | None) -> dict:
             return {
                 "predicted_rul_days": int(np.random.uniform(50, 250)),
                 "risk_level": np.random.choice(["low", "medium", "high"]),
-                "confidence": round(float(np.random.uniform(0.7, 0.99)), 3),
+                "confidence": round(np.random.uniform(0.7, 0.99), 3),
                 "maintenance_recommendation": "Monitor closely",
                 "rows_processed": len(df),
                 "source": "mock"
@@ -244,10 +245,10 @@ def _analyze_with_alert(csv_bytes: bytes | None) -> dict:
         if alert_model is None:
             # Mock response if model not found
             return {
-                "alert_probability": round(float(np.random.uniform(0.4, 0.95)), 3),
+                "alert_probability": round(np.random.uniform(0.4, 0.95), 3),
                 "severity": np.random.choice(["low", "medium", "high"]),
-                "anomaly_detected": bool(np.random.random() > 0.5),
-                "confidence": round(float(np.random.uniform(0.75, 0.98)), 3),
+                "anomaly_detected": np.random.random() > 0.5,
+                "confidence": round(np.random.uniform(0.75, 0.98), 3),
                 "rows_processed": len(df),
                 "source": "mock"
             }
@@ -307,7 +308,7 @@ def _analyze_with_resnet(image_bytes: bytes | None) -> dict:
             "predicted_class": classes[pred_idx],
             "confidence": round(confidence, 3),
             "top_3_predictions": [
-                {"class": classes[i], "confidence": round(float(np.random.uniform(0.1, 0.8)), 3)}
+                {"class": classes[i], "confidence": round(np.random.uniform(0.1, 0.8), 3)}
                 for i in range(3)
             ],
             "source": "mock"
@@ -344,7 +345,7 @@ def _analyze_with_random_forest(csv_bytes: bytes | None) -> dict:
             "predicted_label": f"class_{predictions[0]}",
             "probability": round(float(probabilities[0]), 3),
             "feature_importance": [
-                {"feature": f"col_{i}", "importance": round(float(np.random.uniform(0.1, 0.4)), 3)}
+                {"feature": f"col_{i}", "importance": round(np.random.uniform(0.1, 0.4), 3)}
                 for i in range(min(5, len(df.columns)))
             ],
             "accuracy": round(float(np.mean(probabilities)), 3),
@@ -411,7 +412,7 @@ def _analyze_with_xgboost(csv_bytes: bytes | None) -> dict:
         return {
             "predicted_value": round(pred_value, 2),
             "shap_importance": [
-                {"feature": f"feature_{i}", "impact": round(float(np.random.uniform(0.05, 0.5)), 3)}
+                {"feature": f"feature_{i}", "impact": round(np.random.uniform(0.05, 0.5), 3)}
                 for i in range(min(3, len(df.columns)))
             ],
             "prediction_interval": [round(pred_value - 8, 2), round(pred_value + 8, 2)],

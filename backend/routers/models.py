@@ -2,9 +2,9 @@
 # API endpoints for the new ML Models Hub feature
 
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from services.model_service import analyze_with_model
-from config.models_config import MODELS
-from database import get_analysis_history, get_analytics_stats, init_db
+from backend.services.model_service import analyze_with_model
+from backend.config.models_config import MODELS
+from backend.database import get_analysis_history, get_analytics_stats, init_db
 
 # Initialize database on module import
 init_db()
@@ -70,12 +70,12 @@ async def analyze_model(model_id: str, file: UploadFile = File(None)):
         file_content = None
         file_name = "none"
         
-        if file:
+        if file is not None:
             file_name = file.filename or "unknown"
             file_content = await file.read()
             
             # Validate file type
-            supported_types = model_config["supported_inputs"]
+            supported_types: list[str] = model_config.get("supported_inputs", [])
             if file_name.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
                 if "image" not in supported_types:
                     raise HTTPException(
@@ -115,7 +115,7 @@ async def analyze_model(model_id: str, file: UploadFile = File(None)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/history")
-async def get_analysis_history_endpoint(limit: int = 50, model_id: str = None):
+async def get_analysis_history_endpoint(limit: int = 50, model_id: str | None = None):
     """Get recent analysis history from database"""
     history = get_analysis_history(limit=limit, model_id=model_id)
     return {

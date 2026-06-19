@@ -5,8 +5,7 @@ import io
 import pandas as pd
 import xgboost as xgb
 import joblib
-from sklearn.ensemble import IsolationForest
-from utils.mock_data import get_maintenance_mock
+from backend.utils.mock_data import get_maintenance_mock
 
 _xgb_model = None
 
@@ -64,7 +63,7 @@ def run_maintenance_analytics(payload: dict | bytes | None = None) -> dict:
     machines = data["machines"]
     if len(machines) >= 3:
         X = np.array([[m["vibration_mm_s"], m["temperature_c"]] for m in machines])
-        clf = IsolationForest(contamination=0.2, random_state=42)
+        clf = IsolationForest(contamination=0.2, random_state=42)  # type: ignore
         preds = clf.fit_predict(X)
         for i, m in enumerate(machines):
             m["isolation_forest_anomaly"] = bool(preds[i] == -1)

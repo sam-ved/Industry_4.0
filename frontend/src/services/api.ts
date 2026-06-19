@@ -121,6 +121,11 @@ export const maintenanceAPI = {
 // LLM INSIGHTS
 // ──────────────────────────────────────────────────────────────────────────
 export const llmAPI = {
+  health: async () => {
+    const response = await apiClient.get('/api/llm/health')
+    return response.data
+  },
+
   explain: async (module: string, predictionData: Record<string, unknown>) => {
     const response = await apiClient.post('/api/llm/explain', {
       module: module,
@@ -129,6 +134,14 @@ export const llmAPI = {
     return response.data
   },
   
+  chat: async (contextData: Record<string, unknown>, messages: { role: string, content: string }[]) => {
+    const response = await apiClient.post('/api/llm/chat', {
+      context_data: contextData,
+      messages: messages,
+    })
+    return response.data
+  },
+
   dashboard: async () => {
     const response = await apiClient.get('/api/llm/dashboard')
     return response.data
@@ -167,6 +180,50 @@ export const modelsAPI = {
   
   stats: async () => {
     const response = await apiClient.get('/api/models/stats')
+    return response.data
+  },
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// ML STUDIO
+// ──────────────────────────────────────────────────────────────────────────
+
+export interface MLRunConfig {
+  file_id: string
+  target_column?: string
+  features: string[]
+  algorithm: string
+  task_type: string
+}
+
+export const mlStudioAPI = {
+  upload: async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await apiClient.post('/ml-studio/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    })
+    return response.data
+  },
+
+  suggestFeatures: async (fileId: string, targetColumn: string) => {
+    const response = await apiClient.post('/ml-studio/feature-suggestions', {
+      file_id: fileId,
+      target_column: targetColumn,
+    })
+    return response.data
+  },
+
+  run: async (config: MLRunConfig) => {
+    const response = await apiClient.post('/ml-studio/run', config, {
+      timeout: 300000,
+    })
+    return response.data
+  },
+
+  insights: async (results: Record<string, unknown>) => {
+    const response = await apiClient.post('/ml-studio/insights', { results })
     return response.data
   },
 }

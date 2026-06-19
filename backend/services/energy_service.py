@@ -1,12 +1,12 @@
 import numpy as np
-from utils.mock_data import get_energy_mock
+from backend.utils.mock_data import get_energy_mock
 
 
 import pandas as pd
 import io
 import os
 import joblib
-from utils.mock_data import get_energy_mock
+from backend.utils.mock_data import get_energy_mock
 
 _rf_model = None
 

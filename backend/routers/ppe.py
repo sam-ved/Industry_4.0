@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File
-from services.ppe_service import run_ppe_detection
+from backend.services.ppe_service import run_ppe_detection
 
 router = APIRouter(prefix="/api/ppe", tags=["PPE Monitoring"])
 
@@ -12,6 +12,6 @@ async def ppe_status():
 
 @router.post("/analyze")
 async def ppe_analyze(file: UploadFile = File(None)):
-    image_bytes = await file.read() if file else None
+    image_bytes = await file.read() if file is not None else None
     data = run_ppe_detection(image_bytes)
     return {"status": "ok", "data": data}

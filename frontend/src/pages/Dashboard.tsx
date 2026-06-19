@@ -91,25 +91,22 @@ function KPICard({ label, value, unit, trend, trendValue, color, icon: Icon, pul
 
 // ─── AI Insights Panel ───────────────────────────────────────────────────────
 
-function InsightsPanel({ insights, loading }: any) {
-  const levelStyle = {
-    critical: { color: '#EF4444', bg: 'rgba(239,68,68,0.08)',   border: 'rgba(239,68,68,0.2)',   icon: AlertTriangle },
-    warning:  { color: '#F97316', bg: 'rgba(249,115,22,0.08)',  border: 'rgba(249,115,22,0.2)',  icon: TrendingUp },
-    info:     { color: '#3B82F6', bg: 'rgba(59,130,246,0.08)',  border: 'rgba(59,130,246,0.2)',  icon: Gauge },
-    ok:       { color: '#10B981', bg: 'rgba(16,185,129,0.08)',  border: 'rgba(16,185,129,0.2)',  icon: CheckCircle },
-  }
+function InsightsPanel({ insights, llmHealth, loading, systemError }: any) {
+  const isHealthy = llmHealth?.status === 'healthy'
+  const isConnected = llmHealth?.connected
+  const provider = llmHealth?.provider ?? 'gemini'
+  const modelName = llmHealth?.model ?? 'Loading...'
 
-  const fallbackAlerts = [
-    { level: 'critical', title: 'Abnormal Vibration',  body: 'Machine 3 showing abnormal vibration patterns. Bearing wear likely.' },
-    { level: 'warning',  title: 'Energy Spike',        body: 'Energy usage increased by 12% in last 3 hours. Line B affected.' },
-    { level: 'info',     title: 'Maintenance Due',     body: 'Compressor unit RUL at 87h. Schedule maintenance within 4 days.' },
-    { level: 'ok',       title: 'PPE Compliance',      body: 'All zones meeting 98%+ compliance. Zone A flagged 1 violation.' },
-  ]
+  // Calculate actual System Health
+  const modulesOnline = systemError ? 0 : 4;
+  const llmOnline = isHealthy ? 1 : 0;
+  const totalSystems = 5;
+  const onlineSystems = modulesOnline + llmOnline;
+  const healthScore = Math.round((onlineSystems / totalSystems) * 100);
+  const offlineSystems = totalSystems - onlineSystems;
 
-  const alerts      = insights?.key_alerts              ?? fallbackAlerts
-  const actions     = insights?.top_recommended_actions ?? ['Inspect Machine 3 bearings', 'Review Line B energy profile', 'Schedule compressor maintenance']
-  const healthScore = insights?.system_health_score     ?? 94
-  const headline    = insights?.headline                ?? null
+  const noContext = insights?.status === 'no_context' || (!insights && !loading);
+  const llmInsights = insights?.llm_insights;
 
   return (
     <motion.div
@@ -124,7 +121,7 @@ function InsightsPanel({ insights, loading }: any) {
       }}
     >
       {/* Header */}
-      <motion.div variants={itemVariants} className="flex items-center justify-between pb-3 border-b"
+      <motion.div variants={itemVariants} className="flex items-center justify-between pb-3 border-b flex-wrap gap-2"
         style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
         <div className="flex items-center gap-2">
           <div className="flex items-center justify-center w-7 h-7 rounded-lg"
@@ -139,32 +136,42 @@ function InsightsPanel({ insights, loading }: any) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-emerald-400" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
-          </span>
-          <span className="text-xs" style={{ color: '#10B981' }}>Live</span>
+        
+        <div className="flex items-center gap-3">
+          {/* Model info */}
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md border" 
+               style={{ background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.1)' }}>
+            <span className="text-[10px] uppercase font-semibold text-slate-400">{provider}</span>
+            <span className="text-[10px] text-slate-300">{modelName}</span>
+          </div>
+
+          {/* Connection status */}
+          <div className="flex items-center gap-1.5">
+            <span className="relative flex h-2 w-2">
+              {isHealthy ? (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-emerald-400" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+                </>
+              ) : (
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
+              )}
+            </span>
+            <span className="text-xs" style={{ color: isHealthy ? '#10B981' : '#EF4444' }}>
+              {isHealthy && isConnected ? 'Live & Connected' : 'Degraded'}
+            </span>
+          </div>
         </div>
       </motion.div>
 
-      {/* LLM Headline */}
-      {headline && (
-        <motion.div variants={itemVariants}
-          className="px-3 py-2 rounded-lg text-xs leading-relaxed italic"
-          style={{ background: 'rgba(6,182,212,0.06)', borderLeft: '2px solid #06B6D4', color: '#94A3B8' }}>
-          {headline}
-        </motion.div>
-      )}
-
       {/* System Health Bar */}
       <motion.div variants={itemVariants} className="rounded-lg p-3"
-        style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}>
+        style={{ background: healthScore > 50 ? 'rgba(16,185,129,0.06)' : 'rgba(239,68,68,0.06)', border: `1px solid ${healthScore > 50 ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)'}` }}>
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#94A3B8' }}>
             System Health
           </span>
-          <span className="text-sm font-bold" style={{ color: '#10B981' }}>{healthScore}%</span>
+          <span className="text-sm font-bold" style={{ color: healthScore > 50 ? '#10B981' : '#EF4444' }}>{healthScore}%</span>
         </div>
         <div className="h-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.07)' }}>
           <motion.div
@@ -172,56 +179,74 @@ function InsightsPanel({ insights, loading }: any) {
             animate={{ width: `${healthScore}%` }}
             transition={{ duration: 1.2, ease: 'easeOut', delay: 0.4 }}
             className="h-full rounded-full"
-            style={{ background: 'linear-gradient(90deg, #10B981, #06B6D4)' }}
+            style={{ background: healthScore > 50 ? 'linear-gradient(90deg, #10B981, #06B6D4)' : 'linear-gradient(90deg, #EF4444, #F97316)' }}
           />
         </div>
         <div className="flex justify-between mt-2">
-          <span className="text-xs" style={{ color: '#64748B' }}>4 systems online</span>
-          <span className="text-xs" style={{ color: '#64748B' }}>0 offline</span>
+          <span className="text-xs" style={{ color: '#64748B' }}>{onlineSystems} systems online</span>
+          <span className="text-xs" style={{ color: offlineSystems > 0 ? '#EF4444' : '#64748B' }}>{offlineSystems} offline</span>
         </div>
       </motion.div>
 
-      {/* Alerts */}
-      <div className="flex flex-col gap-2.5 flex-1 overflow-y-auto">
+      {/* Dynamic Content Area */}
+      <div className="flex flex-col gap-4 flex-1 overflow-y-auto">
         {loading && !insights ? (
           [1, 2, 3].map(i => (
             <div key={i} className="h-16 rounded-lg animate-pulse"
               style={{ background: 'rgba(255,255,255,0.04)' }} />
           ))
-        ) : (
-          alerts.map((a, i) => {
-            const s = levelStyle[a.level] || levelStyle.info
-            const AlertIcon = s.icon
-            return (
-              <motion.div key={i} variants={itemVariants}
-                className="flex gap-3 p-3 rounded-lg border"
-                style={{ background: s.bg, borderColor: s.border }}>
-                <div className="flex-shrink-0 mt-0.5">
-                  <AlertIcon size={14} style={{ color: s.color }} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="text-xs font-semibold block" style={{ color: '#F1F5F9' }}>{a.title}</span>
-                  <p className="text-xs mt-0.5 leading-relaxed" style={{ color: '#94A3B8' }}>{a.body}</p>
-                </div>
-              </motion.div>
-            )
-          })
-        )}
-      </div>
-
-      {/* Recommended Actions */}
-      <motion.div variants={itemVariants} className="pt-3 border-t"
-        style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
-        <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: '#64748B' }}>
-          Recommended Actions
-        </p>
-        {actions.map((action, i) => (
-          <div key={i} className="flex items-center gap-2 py-1.5">
-            <ChevronRight size={12} style={{ color: '#06B6D4' }} />
-            <span className="text-xs" style={{ color: '#CBD5E1' }}>{action}</span>
+        ) : noContext ? (
+          <div className="flex flex-col items-center justify-center flex-1 py-10 opacity-60">
+            <Beaker size={32} className="mb-3 text-slate-500" />
+            <p className="text-sm text-slate-400 font-medium text-center">No model results available yet.</p>
+            <p className="text-xs text-slate-500 text-center mt-1">Run an analysis in any module to generate AI insights.</p>
           </div>
-        ))}
-      </motion.div>
+        ) : llmInsights ? (
+          <>
+            {/* Executive Summary */}
+            {llmInsights.executive_summary && (
+              <motion.div variants={itemVariants}
+                className="px-4 py-3 rounded-lg text-sm leading-relaxed"
+                style={{ background: 'rgba(6,182,212,0.06)', borderLeft: '2px solid #06B6D4', color: '#E2E8F0' }}>
+                <span className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#06B6D4' }}>Executive Summary</span>
+                {llmInsights.executive_summary}
+              </motion.div>
+            )}
+
+            {/* Key Findings */}
+            {llmInsights.key_findings && llmInsights.key_findings.length > 0 && (
+              <motion.div variants={itemVariants} className="flex flex-col gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#94A3B8' }}>Key Findings</span>
+                {llmInsights.key_findings.map((finding: string, i: number) => (
+                  <div key={i} className="flex gap-3 p-3 rounded-lg border"
+                    style={{ background: 'rgba(59,130,246,0.06)', borderColor: 'rgba(59,130,246,0.15)' }}>
+                    <div className="flex-shrink-0 mt-0.5">
+                      <TrendingUp size={14} style={{ color: '#3B82F6' }} />
+                    </div>
+                    <p className="text-xs leading-relaxed" style={{ color: '#CBD5E1' }}>{finding}</p>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+
+            {/* Recommendations */}
+            {llmInsights.recommendations && llmInsights.recommendations.length > 0 && (
+              <motion.div variants={itemVariants} className="flex flex-col gap-2 pt-2">
+                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#10B981' }}>Recommended Actions</span>
+                {llmInsights.recommendations.map((action: string, i: number) => (
+                  <div key={i} className="flex gap-3 p-3 rounded-lg border"
+                    style={{ background: 'rgba(16,185,129,0.06)', borderColor: 'rgba(16,185,129,0.15)' }}>
+                    <div className="flex-shrink-0 mt-0.5">
+                      <CheckCircle size={14} style={{ color: '#10B981' }} />
+                    </div>
+                    <p className="text-xs leading-relaxed" style={{ color: '#CBD5E1' }}>{action}</p>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </>
+        ) : null}
+      </div>
     </motion.div>
   )
 }
@@ -230,7 +255,7 @@ function InsightsPanel({ insights, loading }: any) {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { kpis, insights, loading, error, refresh } = useDashboard()
+  const { kpis, insights, llmHealth, loading, error, refresh } = useDashboard()
 
   const accentMap = {
     cyan:    { text: '#06B6D4', border: 'rgba(6,182,212,0.25)',  bg: 'rgba(6,182,212,0.08)',  glow: 'rgba(6,182,212,0.15)' },
@@ -501,7 +526,7 @@ export default function Dashboard() {
 
           {/* AI Insights Panel */}
           <motion.div variants={itemVariants} initial="hidden" animate="visible" className="xl:col-span-1">
-            <InsightsPanel insights={insights} loading={loading} />
+            <InsightsPanel insights={insights} llmHealth={llmHealth} loading={loading} systemError={error} />
           </motion.div>
         </div>
 

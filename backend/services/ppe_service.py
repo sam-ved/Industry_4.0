@@ -3,7 +3,7 @@ import io
 # pyrefly: ignore [missing-import]
 import numpy as np
 from PIL import Image, ImageOps
-from utils.mock_data import get_ppe_mock
+from backend.utils.mock_data import get_ppe_mock
 
 _model = None
 
@@ -41,7 +41,10 @@ def run_ppe_detection(image_bytes: bytes | None = None) -> dict:
 
     try:
         image = Image.open(io.BytesIO(image_bytes))
-        image = ImageOps.exif_transpose(image).convert("RGB")
+        transposed = ImageOps.exif_transpose(image)
+        if transposed is not None:
+            image = transposed
+        image = image.convert("RGB")
         w, h = image.size
         img_array = np.array(image)
         results = model(img_array, verbose=False)[0]

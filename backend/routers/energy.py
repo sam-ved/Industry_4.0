@@ -1,6 +1,6 @@
 # pyrefly: ignore [missing-import]
 from fastapi import APIRouter, UploadFile, File
-from services.energy_service import run_energy_analytics
+from backend.services.energy_service import run_energy_analytics
 
 router = APIRouter(prefix="/api/energy", tags=["Energy Analytics"])
 
