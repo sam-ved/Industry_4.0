@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell,
-  ScatterChart, Scatter, CartesianGrid, Legend,
+  ScatterChart, Scatter, CartesianGrid, Legend, ReferenceLine
 } from 'recharts';
 import { BarChart2, Activity, PieChart as PieIcon, GitBranch, TrendingUp, Grid3X3 } from 'lucide-react';
 
@@ -25,51 +25,46 @@ interface ChartsPanelProps {
 }
 
 export default function ChartsPanel({ results }: ChartsPanelProps) {
-  if (!results) return null;
+  if (!results || !results.visualizations) return null;
+  const viz = results.visualizations;
+
+  const regressionDomain = useMemo(() => {
+    if (!viz.actual_vs_predicted || viz.actual_vs_predicted.length === 0) return [0, 0];
+    const vals = viz.actual_vs_predicted.flatMap((d: any) => [d.actual, d.predicted]).filter((v: any) => typeof v === 'number' && !isNaN(v));
+    if (vals.length === 0) return [0, 0];
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const pad = Math.max(0.1, (max - min) * 0.05);
+    return [Math.floor(min - pad), Math.ceil(max + pad)];
+  }, [viz.actual_vs_predicted]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-      {/* Feature Importance */}
-      {results.feature_importance && (
-        <ChartCard icon={<BarChart2 size={15} className="text-[#3B82F6]" />} title="Feature Importance">
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={results.feature_importance} layout="vertical" margin={{ left: 10, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis type="number" tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="name" tick={{ fill: '#94A3B8', fontSize: 11 }} width={90} axisLine={false} tickLine={false} />
-              <Tooltip {...darkTooltipStyle} />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={16}>
-                {results.feature_importance.map((_: any, i: number) => (
-                  <Cell key={i} fill={`url(#featureGrad)`} />
-                ))}
-              </Bar>
-              <defs>
-                <linearGradient id="featureGrad" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#3B82F6" />
-                  <stop offset="100%" stopColor="#06B6D4" />
-                </linearGradient>
-              </defs>
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      )}
 
       {/* Confusion Matrix */}
-      {results.confusion_matrix && (
-        <ChartCard icon={<Grid3X3 size={15} className="text-[#10B981]" />} title="Confusion Matrix">
+      {viz.confusion_matrix && (
+        <ChartCard 
+          icon={<Grid3X3 size={15} className="text-[#10B981]" />} 
+          title="Confusion Matrix"
+          description="Compares predicted vs actual categories. The diagonal cells (green) indicate correct predictions, while off-diagonal cells (red) are misclassifications."
+        >
           <ConfusionMatrixGrid
-            matrix={results.confusion_matrix}
-            labels={results.class_names}
+            matrix={viz.confusion_matrix.matrix}
+            labels={viz.confusion_matrix.classes}
           />
         </ChartCard>
       )}
 
       {/* ROC Curve */}
-      {results.roc_curve && (
-        <ChartCard icon={<TrendingUp size={15} className="text-[#8B5CF6]" />} title={`ROC Curve (AUC = ${results.roc_curve.auc})`}>
+      {viz.roc_curve && (
+        <ChartCard 
+          icon={<TrendingUp size={15} className="text-[#8B5CF6]" />} 
+          title={`ROC Curve (AUC = ${viz.roc_curve.auc})`}
+          description="Measures the model's ability to distinguish between classes. A curve closer to the top-left corner (higher AUC) represents better performance."
+        >
           <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={results.roc_curve.fpr.map((fpr: number, i: number) => ({
-              fpr, tpr: results.roc_curve.tpr[i],
+            <LineChart data={viz.roc_curve.fpr.map((fpr: number, i: number) => ({
+              fpr, tpr: viz.roc_curve.tpr[i],
             }))}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
               <XAxis dataKey="fpr" tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} label={{ value: 'False Positive Rate', position: 'insideBottom', offset: -2, fill: '#64748B', fontSize: 11 }} />
@@ -82,13 +77,17 @@ export default function ChartsPanel({ results }: ChartsPanelProps) {
         </ChartCard>
       )}
 
-      {/* Prediction Distribution */}
-      {results.prediction_distribution && (
-        <ChartCard icon={<PieIcon size={15} className="text-[#F97316]" />} title="Prediction Distribution">
+      {/* Class Distribution */}
+      {viz.class_distribution && (
+        <ChartCard 
+          icon={<PieIcon size={15} className="text-[#F97316]" />} 
+          title="Class Distribution"
+          description="A breakdown of how often the model predicted each outcome category across the dataset."
+        >
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie
-                data={results.prediction_distribution}
+                data={viz.class_distribution}
                 dataKey="count"
                 nameKey="label"
                 cx="50%"
@@ -98,7 +97,7 @@ export default function ChartsPanel({ results }: ChartsPanelProps) {
                 paddingAngle={2}
                 strokeWidth={0}
               >
-                {results.prediction_distribution.map((_: any, i: number) => (
+                {viz.class_distribution.map((_: any, i: number) => (
                   <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                 ))}
               </Pie>
@@ -115,36 +114,74 @@ export default function ChartsPanel({ results }: ChartsPanelProps) {
 
       {/* Correlation Heatmap */}
       {results.correlation_matrix && (
-        <ChartCard icon={<Activity size={15} className="text-[#06B6D4]" />} title="Correlation Heatmap" wide>
+        <ChartCard 
+          icon={<Activity size={15} className="text-[#06B6D4]" />} 
+          title="Correlation Heatmap" 
+          wide
+          description="Shows the linear relationship between different variables. Values closer to 1 (green) or -1 (red) indicate a strong correlation, while 0 (blue) indicates no correlation."
+        >
           <CorrelationHeatmap matrix={results.correlation_matrix} />
         </ChartCard>
       )}
 
       {/* Predictions vs Actual (regression scatter) */}
-      {results.predictions_vs_actual && (
-        <ChartCard icon={<GitBranch size={15} className="text-[#10B981]" />} title="Predictions vs Actual">
+      {viz.actual_vs_predicted && (
+        <ChartCard 
+          icon={<GitBranch size={15} className="text-[#10B981]" />} 
+          title="Predictions vs Actual"
+          description="Scatter plot comparing the model's predicted values against the actual true values. Points closer to the diagonal line represent accurate predictions."
+        >
           <ResponsiveContainer width="100%" height={280}>
-            <ScatterChart margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+            <ScatterChart margin={{ top: 5, right: 20, bottom: 20, left: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="actual" name="Actual" tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} />
-              <YAxis dataKey="predicted" name="Predicted" tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} />
+              <XAxis dataKey="actual" type="number" name="Actual" domain={regressionDomain} tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} label={{ value: 'Actual Target', position: 'insideBottom', offset: -15, fill: '#64748B', fontSize: 11 }} />
+              <YAxis dataKey="predicted" type="number" name="Predicted" domain={regressionDomain} tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} label={{ value: 'Predicted Target', angle: -90, position: 'insideLeft', offset: -10, fill: '#64748B', fontSize: 11 }} />
               <Tooltip {...darkTooltipStyle} />
-              <Scatter data={results.predictions_vs_actual} fill="#10B981" fillOpacity={0.6} />
+              <Scatter data={viz.actual_vs_predicted.filter((d: any) => typeof d.actual === 'number' && !isNaN(d.actual) && typeof d.predicted === 'number' && !isNaN(d.predicted))} fill="#10B981" fillOpacity={0.6} />
+              <ReferenceLine segment={[{ x: regressionDomain[0], y: regressionDomain[0] }, { x: regressionDomain[1], y: regressionDomain[1] }]} stroke="rgba(255,255,255,0.4)" strokeDasharray="3 3" />
+            </ScatterChart>
+          </ResponsiveContainer>
+        </ChartCard>
+      )}
+
+      {/* Residuals vs Predicted */}
+      {viz.residuals && (
+        <ChartCard 
+          icon={<GitBranch size={15} className="text-[#F59E0B]" />} 
+          title="Residual Analysis"
+          description="Displays the prediction error (residual) against the predicted value. Ideally, points should be randomly scattered around the zero line without obvious patterns."
+        >
+          <ResponsiveContainer width="100%" height={280}>
+            <ScatterChart margin={{ top: 5, right: 20, bottom: 20, left: 20 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="predicted" type="number" name="Predicted" tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} label={{ value: 'Predicted Target', position: 'insideBottom', offset: -15, fill: '#64748B', fontSize: 11 }} />
+              <YAxis dataKey="residual" type="number" name="Residual" tick={{ fill: '#64748B', fontSize: 11 }} axisLine={false} label={{ value: 'Residual (Error)', angle: -90, position: 'insideLeft', offset: -10, fill: '#64748B', fontSize: 11 }} />
+              <Tooltip {...darkTooltipStyle} />
+              <Scatter data={viz.residuals.filter((d: any) => typeof d.predicted === 'number' && !isNaN(d.predicted) && typeof d.residual === 'number' && !isNaN(d.residual))} fill="#F59E0B" fillOpacity={0.6} />
+              <ReferenceLine y={0} stroke="rgba(255,255,255,0.5)" strokeDasharray="3 3" />
             </ScatterChart>
           </ResponsiveContainer>
         </ChartCard>
       )}
 
       {/* Cluster Scatter */}
-      {results.cluster_scatter && (
-        <ChartCard icon={<GitBranch size={15} className="text-[#F97316]" />} title="Cluster Plot (PCA 2D)">
-          <ClusterScatter data={results.cluster_scatter} />
+      {viz.pca_2d && (
+        <ChartCard 
+          icon={<GitBranch size={15} className="text-[#F97316]" />} 
+          title="Cluster Plot (PCA 2D)"
+          description="Visualizes natural groupings within the data. Points of the same color belong to the same discovered cluster."
+        >
+          <ClusterScatter data={viz.pca_2d} />
         </ChartCard>
       )}
 
       {/* Anomaly Scatter */}
       {results.anomaly_scatter && (
-        <ChartCard icon={<Activity size={15} className="text-[#EF4444]" />} title="Anomaly Plot (PCA 2D)">
+        <ChartCard 
+          icon={<Activity size={15} className="text-[#EF4444]" />} 
+          title="Anomaly Plot (PCA 2D)"
+          description="Highlights unusual data points. Red points represent detected anomalies that deviate significantly from the normal operational data."
+        >
           <AnomalyScatter data={results.anomaly_scatter} />
         </ChartCard>
       )}
@@ -155,13 +192,18 @@ export default function ChartsPanel({ results }: ChartsPanelProps) {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function ChartCard({ icon, title, children, wide }: { icon: React.ReactNode; title: string; children: React.ReactNode; wide?: boolean }) {
+function ChartCard({ icon, title, description, children, wide }: { icon: React.ReactNode; title: string; description?: React.ReactNode; children: React.ReactNode; wide?: boolean }) {
   return (
     <div className={`flex min-w-0 flex-col gap-3 rounded-xl border p-5 ${wide ? 'lg:col-span-2' : ''}`}
       style={{ background: 'rgba(11,20,35,0.6)', borderColor: 'rgba(255,255,255,0.08)' }}>
-      <div className="flex items-center gap-2">
-        {icon}
-        <h3 className="font-semibold text-xs text-[#F9FAFB]">{title}</h3>
+      <div>
+        <div className="flex items-center gap-2">
+          {icon}
+          <h3 className="font-semibold text-xs text-[#F9FAFB]">{title}</h3>
+        </div>
+        {description && (
+          <p className="text-[10.5px] text-[#94A3B8] mt-1.5 leading-relaxed">{description}</p>
+        )}
       </div>
       {children}
     </div>

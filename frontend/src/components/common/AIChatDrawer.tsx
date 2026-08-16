@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Send, Bot, User, Loader2, AlertTriangle } from 'lucide-react'
 import { llmAPI } from '../../services/api'
@@ -61,23 +61,14 @@ export default function AIChatDrawer({ isOpen, onClose, module, contextData }: A
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
+          {/* Floating Panel */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
-          />
-
-          {/* Drawer */}
-          <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
+            initial={{ y: '100%', opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: '100%', opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-0 right-0 z-50 w-full sm:w-[450px] h-full shadow-2xl flex flex-col"
-            style={{ background: 'rgba(11,20,35,0.95)', borderLeft: '1px solid rgba(255,255,255,0.08)' }}
+            className="fixed bottom-6 right-6 z-[1000] w-full max-w-[calc(100vw-48px)] sm:w-[360px] h-[520px] max-h-[calc(100vh-48px)] shadow-2xl flex flex-col rounded-xl border border-slate-700/50 overflow-hidden"
+            style={{ background: 'rgba(11,20,35,0.95)' }}
           >
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>

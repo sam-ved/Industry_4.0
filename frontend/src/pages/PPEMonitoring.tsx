@@ -6,40 +6,66 @@ import { motion } from 'framer-motion'
 import {
   Shield,
   ArrowLeft,
-  Download,
   Loader,
   BarChart3,
   AlertCircle,
   CheckCircle2,
   AlertTriangle,
+  Info,
+  Image as ImageIcon
 } from 'lucide-react'
-import { llmAPI, ppeAPI } from '../services/api'
+import { ppeAPI } from '../services/api'
 import { useBackendStatus } from '../hooks/useBackendStatus'
 import ModelInputHandler from '../components/ModelInputHandler'
 import BackgroundGlow from '../components/common/BackgroundGlow'
 import AIInsightsPanel from '../components/common/AIInsightsPanel'
 import AIChatDrawer from '../components/common/AIChatDrawer'
 import { Bot } from 'lucide-react'
-import { useEffect } from 'react'
+import { useDocumentMeta } from '../hooks/useDocumentMeta'
 
 interface PPEResult {
-  compliance_pct: number
-  equipment_detected: Array<{
-    name: string
-    count: number
-    confidence: number
-  }>
-  missing_equipment: string[]
+  compliance_status: string
+  risk_level: string
+  ppe_status_dict: Record<string, string>
+  reasoning: string
+  detected_items: string[]
+  missing_items: string[]
+  review_items: string[]
   processing_time_ms: number
-  llm_insights?: string
+  source?: string
+  llm_insights?: any
   all_detections?: Array<{
     label: string
     confidence: number
     bbox: [number, number, number, number]
+    reasoning?: string
   }>
   image_width?: number
   image_height?: number
 }
+
+const DEMO_IMAGES = [
+  {
+    name: 'Compliant Worker',
+    description: 'Helmet + Vest Present',
+    path: '/demo/compliant.jpg'
+  },
+  {
+    name: 'Helmet Missing',
+    description: 'Helmet absent',
+    path: '/demo/helmet_missing.jpg'
+  },
+  {
+    name: 'Vest Missing',
+    description: 'Safety vest absent',
+    path: '/demo/vest_missing.jpg'
+  },
+  {
+    name: 'Multiple PPE Missing',
+    description: 'Multiple items absent',
+    path: '/demo/multiple_missing.jpg'
+  }
+]
 
 export default function PPEMonitoring() {
   const navigate = useNavigate()
@@ -50,35 +76,16 @@ export default function PPEMonitoring() {
   const [results, setResults] = useState<PPEResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
-  const [insights, setInsights] = useState(null)
-  const [insightsLoading, setInsightsLoading] = useState(false)
-  const [insightsError, setInsightsError] = useState('')
   const [isChatOpen, setIsChatOpen] = useState(false)
-
-  useEffect(() => {
-    if (results) {
-      const fetchInsights = async () => {
-        setInsightsLoading(true)
-        setInsightsError('')
-        try {
-          const res = await llmAPI.explain('ppe', results as unknown as Record<string, unknown>)
-          setInsights(res.explanation)
-        } catch (err) {
-          setInsightsError('Failed to load AI Insights.')
-        } finally {
-          setInsightsLoading(false)
-        }
-      }
-      fetchInsights()
-    } else {
-      setInsights(null)
-    }
-  }, [results])
+  const [techDetailsOpen, setTechDetailsOpen] = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  useDocumentMeta('PPE Compliance Monitoring', 'Real-time PPE compliance monitoring with AI-powered detection for helmets, vests, and safety equipment.')
 
   const handleFileSelect = (file: File) => {
     setSelectedFile(file)
     setResults(null)
     setError(null)
+    setTechDetailsOpen(false)
 
     // Create preview for images
     if (file.type.startsWith('image/')) {
@@ -89,6 +96,18 @@ export default function PPEMonitoring() {
       reader.readAsDataURL(file)
     } else {
       setPreview(null)
+    }
+  }
+
+  const loadDemoImage = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url)
+      if (!response.ok) throw new Error('Failed to load demo image')
+      const blob = await response.blob()
+      const file = new File([blob], filename, { type: 'image/jpeg' })
+      handleFileSelect(file)
+    } catch (err) {
+      setError('Failed to load demo image.')
     }
   }
 
@@ -107,8 +126,12 @@ export default function PPEMonitoring() {
     setError(null)
 
     try {
-      const data = await ppeAPI.analyze(selectedFile)
-      setResults(data.data || data)
+      const response = await ppeAPI.analyze(selectedFile)
+      const resultData = response.data || response
+      if (response.llm_insights) {
+        resultData.llm_insights = response.llm_insights
+      }
+      setResults(resultData)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to analyze'
       setError(message)
@@ -122,37 +145,62 @@ export default function PPEMonitoring() {
     setPreview(null)
     setResults(null)
     setError(null)
+    setTechDetailsOpen(false)
+    setAdvancedOpen(false)
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'COMPLIANT':
+      case 'DETECTED':
+        return 'text-emerald-400'
+      case 'NON-COMPLIANT':
+      case 'NOT DETECTED':
+        return 'text-red-400'
+      case 'NEEDS REVIEW':
+      default:
+        return 'text-amber-400'
+    }
+  }
+
+  const getRiskColor = (risk: string) => {
+    switch (risk) {
+      case 'LOW': return 'text-emerald-400'
+      case 'MEDIUM': return 'text-amber-400'
+      case 'HIGH': return 'text-red-400'
+      default: return 'text-slate-400'
+    }
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
+    <div className="min-h-screen bg-slate-950 text-white overflow-x-hidden">
       <BackgroundGlow />
 
       {/* Header */}
-      <div className="relative z-10 border-b border-slate-800 bg-slate-900/50 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-6 py-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className="relative z-10 border-b border-slate-800 bg-slate-900/50 backdrop-blur w-full">
+        <div className="w-full max-w-[1440px] mx-auto px-6 py-6 flex flex-wrap items-center justify-between gap-4 box-border">
+          <div className="flex items-center gap-4 min-w-0">
             <button
               onClick={() => navigate('/')}
               title="Go back to dashboard"
-              className="p-2 hover:bg-slate-800 rounded-lg transition"
+              className="p-2 hover:bg-slate-800 rounded-lg transition shrink-0"
             >
               <ArrowLeft size={20} />
             </button>
-            <div>
-              <h1 className="text-2xl font-bold">PPE Compliance Monitoring</h1>
-              <p className="text-sm text-slate-400">Personal Protective Equipment Detection</p>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl font-bold truncate">PPE Compliance Monitoring</h1>
+              <p className="text-xs sm:text-sm text-slate-400 truncate">Personal Protective Equipment Detection</p>
             </div>
           </div>
 
           {/* Status Badge */}
-          <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-slate-800 border border-slate-700">
+          <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-slate-800 border border-slate-700 shrink-0">
             <div
               className={`w-2 h-2 rounded-full ${
                 backendStatus.isOnline ? 'bg-emerald-500' : 'bg-red-500'
               } animate-pulse`}
             />
-            <span className="text-sm">
+            <span className="text-sm whitespace-nowrap">
               {backendStatus.isOnline ? 'Backend Online' : 'Backend Offline'}
             </span>
           </div>
@@ -160,13 +208,13 @@ export default function PPEMonitoring() {
       </div>
 
       {/* Main Content */}
-      <div className="relative z-10 max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="relative z-10 w-full max-w-[1440px] mx-auto px-6 py-8 box-border">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] gap-6">
           {/* Left: Upload & Preview */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-6"
+            className="space-y-6 min-w-0"
           >
             <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6 backdrop-blur">
               <h2 className="text-lg font-semibold mb-4">Upload Image or Video</h2>
@@ -177,14 +225,34 @@ export default function PPEMonitoring() {
                 disabled={!backendStatus.isOnline || isLoading}
               />
 
+              {/* Demo Mode Section - Compact */}
+              <div className="mt-6 pt-6 border-t border-slate-800">
+                <div className="flex items-center gap-2 mb-3">
+                  <ImageIcon size={16} className="text-indigo-400" />
+                  <h3 className="text-sm font-medium text-slate-300">Or use a demo image</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {DEMO_IMAGES.map((demo, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => loadDemoImage(demo.path, `${demo.name.replace(' ', '_')}.jpg`)}
+                      disabled={isLoading}
+                      className="p-2 text-left bg-slate-800/30 hover:bg-slate-700/50 border border-slate-700/50 rounded-lg transition-colors flex flex-col disabled:opacity-50"
+                    >
+                      <span className="font-medium text-xs text-slate-200">{demo.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Preview */}
               {preview && (
-                <div className="mt-6 rounded-lg overflow-hidden border border-slate-700 bg-black/20">
+                <div className="mt-6 rounded-lg overflow-hidden border border-slate-700 bg-black/20 w-full box-border">
                   <div className="relative w-full group flex justify-center">
                     <img
                       src={preview}
-                      alt="Preview"
-                      className="max-h-96 object-contain"
+                      alt="PPE compliance inspection preview"
+                      className="w-full h-auto max-h-[600px] object-contain"
                     />
                     
                     {/* Bounding Boxes */}
@@ -270,100 +338,139 @@ export default function PPEMonitoring() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="space-y-6"
+            className="space-y-6 min-w-0"
           >
             {results ? (
               <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6 backdrop-blur space-y-6">
-                <h2 className="text-lg font-semibold">Compliance Results</h2>
-
-                {/* Main Compliance Score */}
-                <div className="bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/50 rounded-lg p-6 text-center">
-                  <p className="text-sm text-slate-400 mb-2">Compliance Rate</p>
-                  <div className="flex items-end justify-center gap-2">
-                    <span className="text-5xl font-bold text-emerald-400">
-                      {results.compliance_pct?.toFixed(1) || 0}
+                
+                {/* Main Compliance Status */}
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-400 mb-2 uppercase tracking-wider">PPE Compliance</h2>
+                  <div className="flex items-center justify-between bg-slate-800/40 p-4 rounded-lg border border-slate-700">
+                    <span className={`text-2xl font-bold ${getStatusColor(results.compliance_status)}`}>
+                      {results.compliance_status}
                     </span>
-                    <span className="text-2xl text-emerald-400 mb-1">%</span>
-                  </div>
-                  <div className="mt-4 w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                    <div
-                      // eslint-disable-next-line @stylistic/no-restricted-syntax
-                      className="bg-emerald-500 h-full transition-all duration-500"
-                      style={{ width: `${results.compliance_pct || 0}%` }}
-                    />
+                    <div className="flex flex-col items-end">
+                      <span className="text-xs text-slate-400 uppercase">Risk Level</span>
+                      <span className={`text-lg font-bold ${getRiskColor(results.risk_level)}`}>
+                        {results.risk_level}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Equipment Detected */}
-                {results.equipment_detected && results.equipment_detected.length > 0 && (
-                  <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4">
-                    <p className="text-sm font-semibold mb-3 flex items-center gap-2">
-                      <CheckCircle2 size={16} className="text-emerald-500" />
-                      Equipment Detected
-                    </p>
+                {/* Reasoning */}
+                {results.reasoning && (
+                  <div className={`p-4 rounded-lg border ${results.compliance_status === 'COMPLIANT' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-100' : results.compliance_status === 'NON-COMPLIANT' ? 'bg-red-500/10 border-red-500/30 text-red-100' : 'bg-amber-500/10 border-amber-500/30 text-amber-100'}`}>
+                    <div className="flex items-start gap-3">
+                      <Info className="mt-0.5 shrink-0" size={18} />
+                      <p className="text-sm">{results.reasoning}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* PPE Checklist */}
+                {results.ppe_status_dict && (
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wider">Required PPE Checked</h3>
                     <div className="space-y-2">
-                      {results.equipment_detected.map((item, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between text-sm bg-slate-900/50 p-3 rounded"
-                        >
-                          <span>{item.name}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-400">×{item.count}</span>
-                            <span className="text-emerald-400 font-medium">
-                              {(item.confidence * 100).toFixed(0)}%
-                            </span>
-                          </div>
+                      {Object.entries(results.ppe_status_dict).map(([item, status]) => (
+                        <div key={item} className="flex justify-between items-center bg-slate-800/40 p-3 rounded-lg border border-slate-700/50">
+                          <span className="font-medium">{item}</span>
+                          <span className={`text-sm font-bold flex items-center gap-1 ${getStatusColor(status as string)}`}>
+                            {status === 'DETECTED' && <CheckCircle2 size={16} />}
+                            {status === 'NOT DETECTED' && <AlertCircle size={16} />}
+                            {status === 'NEEDS REVIEW' && <AlertTriangle size={16} />}
+                            {status}
+                          </span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Missing Equipment */}
-                {results.missing_equipment && results.missing_equipment.length > 0 && (
-                  <div className="bg-amber-500/10 border border-amber-500/50 rounded-lg p-4">
-                    <p className="text-sm font-semibold mb-3 flex items-center gap-2">
-                      <AlertTriangle size={16} className="text-amber-500" />
-                      Missing Equipment
-                    </p>
-                    <ul className="space-y-1">
-                      {results.missing_equipment.map((item, idx) => (
-                        <li key={idx} className="text-sm text-amber-100">
-                          • {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* AI Insights Panel */}
-                <div className="flex items-center justify-between gap-4 pt-4 border-t border-slate-800">
-                  <div>
-                    <h3 className="text-lg font-semibold text-white">AI explanation</h3>
-                    <p className="text-sm text-gray-400">
-                      The model provides insight into compliance violations and safety risks.
-                    </p>
-                  </div>
-                  <div className="flex gap-3 items-center">
-                    <div className="inline-flex rounded-2xl bg-cyan-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-cyan-300">
-                      Insight
-                    </div>
-                    <button 
-                      onClick={() => setIsChatOpen(true)}
-                      disabled={!results}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500 hover:bg-indigo-400 disabled:bg-slate-800 disabled:text-slate-500 text-white font-semibold rounded-lg shadow transition-colors"
-                    >
-                      <Bot size={16} /> Ask AI
-                    </button>
-                  </div>
+                {/* Compact Control Row */}
+                <div className="flex flex-wrap gap-2 mt-6 pt-4 border-t border-slate-800">
+                  {/* Note: AI Chat Drawer is now a floating panel triggered by the AI Insights button */}
+                  <button 
+                    onClick={() => setIsChatOpen(true)}
+                    className="flex items-center justify-center gap-2 flex-1 min-w-[120px] px-3 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 font-medium rounded-lg transition-colors text-xs"
+                  >
+                    <Bot size={14} /> AI Insights
+                  </button>
+                  
+                  <button 
+                    onClick={() => setAdvancedOpen(!advancedOpen)}
+                    className={`flex items-center justify-center gap-2 flex-1 min-w-[140px] px-3 py-2 font-medium rounded-lg transition-colors text-xs border ${
+                      advancedOpen 
+                        ? 'bg-slate-700 border-slate-600 text-white' 
+                        : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-700 hover:border-slate-600 text-slate-300'
+                    }`}
+                  >
+                    <BarChart3 size={14} /> Advanced Analysis
+                  </button>
+                  
+                  <button 
+                    onClick={() => setTechDetailsOpen(!techDetailsOpen)}
+                    className={`flex items-center justify-center gap-2 flex-1 min-w-[140px] px-3 py-2 font-medium rounded-lg transition-colors text-xs border ${
+                      techDetailsOpen 
+                        ? 'bg-slate-700 border-slate-600 text-white' 
+                        : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-700 hover:border-slate-600 text-slate-300'
+                    }`}
+                  >
+                    <Info size={14} /> Technical Details
+                  </button>
                 </div>
 
-                <AIInsightsPanel 
-                  isLoading={insightsLoading} 
-                  insights={insights} 
-                  error={insightsError} 
-                />
+                {/* Collapsible Sections */}
+                {advancedOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="p-4 border border-slate-700 rounded-lg bg-slate-800/30 mt-4 overflow-hidden"
+                  >
+                    <h3 className="text-xs font-semibold text-slate-400 mb-3 uppercase tracking-wider">Advanced Analysis</h3>
+                    <AIInsightsPanel 
+                      isLoading={isLoading} 
+                      insights={results.llm_insights} 
+                      error={error || ''} 
+                    />
+                  </motion.div>
+                )}
+
+                {techDetailsOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="p-4 border border-slate-700 rounded-lg bg-slate-800/30 mt-4 overflow-hidden"
+                  >
+                    <h3 className="text-xs font-semibold text-slate-400 mb-3 uppercase tracking-wider">Technical Details</h3>
+                    <div className="grid grid-cols-2 gap-4 text-sm text-slate-300">
+                      <div>
+                        <span className="text-slate-500 block text-xs uppercase mb-1">Processing Time</span>
+                        <span>{results.processing_time_ms} ms</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-xs uppercase mb-1">Source</span>
+                        <span>{results.source}</span>
+                      </div>
+                    </div>
+                    
+                    {results.all_detections && results.all_detections.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-slate-700/50">
+                        <span className="text-slate-500 block text-xs uppercase mb-2">Raw Detections</span>
+                        <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                          {results.all_detections.map((d, i) => (
+                            <div key={i} className="flex justify-between items-center bg-slate-900/50 p-2 rounded text-xs border border-slate-800">
+                              <span className="capitalize">{d.label.replace('_', ' ')}</span>
+                              <span className="font-mono text-slate-400">conf: {d.confidence.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
 
                 <AIChatDrawer 
                   isOpen={isChatOpen}
@@ -371,19 +478,12 @@ export default function PPEMonitoring() {
                   module="ppe"
                   contextData={results}
                 />
-
-                <button
-                  className="w-full py-2 px-4 bg-slate-800 hover:bg-slate-700 rounded-lg font-medium transition flex items-center justify-center gap-2"
-                >
-                  <Download size={16} />
-                  Export Report
-                </button>
               </div>
             ) : (
-              <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6 backdrop-blur flex items-center justify-center h-96 text-center">
+              <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6 backdrop-blur flex items-center justify-center h-96 text-center w-full box-border">
                 <div>
                   <BarChart3 size={48} className="mx-auto mb-4 text-slate-600" />
-                  <p className="text-slate-400">Upload an image or video and click Check Compliance</p>
+                  <p className="text-slate-400">Upload an image or select a demo to Check Compliance</p>
                   <p className="text-xs text-slate-500 mt-2">to see results here</p>
                 </div>
               </div>

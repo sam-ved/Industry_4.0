@@ -4,8 +4,7 @@ import os
 import sys
 import json
 import hashlib
-from google import genai
-from google.genai import types
+from groq import AsyncGroq
 from dotenv import load_dotenv
 
 # Add backend directory to sys.path to allow direct execution
@@ -15,8 +14,9 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL = "gemini-2.5-flash"
+api_key = os.getenv("GROQ_API_KEY")
+client = AsyncGroq(api_key=api_key) if api_key else None
+MODEL = "llama-3.1-8b-instant"
 
 INDUSTRIAL_PERSONA = (
     "You are an expert Industrial Engineer, Reliability Engineer, and Manufacturing Consultant. "
@@ -27,24 +27,20 @@ INDUSTRIAL_PERSONA = (
 )
 
 
-async def _call_gemini_async(system_prompt: str, user_prompt: str) -> dict:
-    """Core Gemini call — always returns structured JSON."""
+async def _call_groq_async(system_prompt: str, user_prompt: str) -> dict:
+    """Core LLM call — always returns structured JSON."""
     try:
-        response = await client.aio.models.generate_content(
+        if not client:
+            raise ValueError("Groq API client not initialized. Missing GROQ_API_KEY.")
+        response = await client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
             model=MODEL,
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                response_mime_type="application/json",
-            )
+            response_format={"type": "json_object"}
         )
-        raw = response.text or ""
-        # Strip markdown fences if present
-        raw = raw.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
+        raw = response.choices[0].message.content or "{}"
         return json.loads(raw.strip())
     except Exception as e:
         logger.error(f"[LLM Service Error] {str(e)}", exc_info=True)
@@ -53,7 +49,7 @@ async def _call_gemini_async(system_prompt: str, user_prompt: str) -> dict:
             "overall_status": "degraded",
             "headline": "AI Service Temporarily Unavailable",
             "key_alerts": [],
-            "top_recommended_actions": ["Check Gemini API key, billing balance, and quota limit."],
+            "top_recommended_actions": ["Check Groq API key and quota limits."],
             "positive_highlights": [],
             "system_health_score": 50,
             "severity_assessment": "unknown",
@@ -156,24 +152,21 @@ async def explain_industrial_prediction(module: str, prediction: dict) -> dict:
 
     # 3. Call LLM
     try:
-        logger.info("Calling Gemini")
+        if not client:
+            raise ValueError("Groq API client not initialized. Missing GROQ_API_KEY.")
+        logger.info("Calling Groq")
         logger.info(user_prompt)
-        response = await client.aio.models.generate_content(
+        response = await client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
             model=MODEL,
-            contents=user_prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                response_mime_type="application/json",
-            )
+            response_format={"type": "json_object"}
         )
-        logger.info("Gemini Response")
-        logger.info(response.text)
-
-        raw = (response.text or "").strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
+        logger.info("Groq Response")
+        raw = response.choices[0].message.content or "{}"
+        logger.info(raw)
 
         response_data = json.loads(raw.strip())
 
@@ -205,6 +198,28 @@ async def explain_industrial_prediction(module: str, prediction: dict) -> dict:
 
     return response_data
 
+async def explain_individual_detection(module: str, item: dict) -> str:
+    """Provides a short 1-2 sentence reasoning for a specific detected item."""
+    system_prompt = (
+        "You are an Industrial AI. Provide a concise, 1-2 sentence explanation or reasoning "
+        "for the following specific detection item. Do not use markdown or formatting."
+    )
+    user_prompt = f"Module: {module}\nDetected Item: {json.dumps(item)}"
+    
+    try:
+        if not client:
+            raise ValueError("Groq API client not initialized. Missing GROQ_API_KEY.")
+        response = await client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            model=MODEL
+        )
+        return (response.choices[0].message.content or "No reasoning provided.").strip()
+    except Exception as e:
+        logger.error(f"[LLM Service Error - Individual] {str(e)}", exc_info=True)
+        return "Reasoning unavailable due to API error."
 
 async def generate_dashboard_insights(context_data: dict) -> dict:
     """Master dashboard reasoning — generates insights based on the latest module execution context."""
@@ -217,7 +232,7 @@ async def generate_dashboard_insights(context_data: dict) -> dict:
         "recommendations (list of 3 strings with prioritized actionable advice)."
     )
     user_prompt = f"Latest model context: {json.dumps(context_data, indent=2)}"
-    return await _call_gemini_async(system_prompt, user_prompt)
+    return await _call_groq_async(system_prompt, user_prompt)
 
 
 async def chat_with_context(context_data: dict, messages: list) -> str:
@@ -229,23 +244,18 @@ async def chat_with_context(context_data: dict, messages: list) -> str:
         f"Here is the context data from the ML model: {json.dumps(context_data)}"
     )
     try:
-        gemini_messages = []
+        if not client:
+            raise ValueError("Groq API client not initialized. Missing GROQ_API_KEY.")
+        formatted_messages = [{"role": "system", "content": system_prompt}]
         for m in messages:
-            if m["role"] == "user":
-                gemini_messages.append(
-                    {"role": "user", "parts": [{"text": m["content"]}]})
-            else:
-                gemini_messages.append(
-                    {"role": "model", "parts": [{"text": m["content"]}]})
-
-        response = await client.aio.models.generate_content(
-            model=MODEL,
-            contents=gemini_messages,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt
-            )
+            role = "user" if m["role"] == "user" else "assistant"
+            formatted_messages.append({"role": role, "content": m["content"]})
+            
+        response = await client.chat.completions.create(
+            messages=formatted_messages,
+            model=MODEL
         )
-        return response.text or ""
+        return response.choices[0].message.content or ""
     except Exception as e:
         logger.error(f"[LLM Service Error] {str(e)}", exc_info=True)
-        return "AI chat is currently unavailable. Please check your Gemini API key and quota."
+        return "AI chat is currently unavailable. Please check your Groq API key and quota."

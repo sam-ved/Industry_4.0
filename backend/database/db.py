@@ -4,9 +4,13 @@
 import sqlite3
 import os
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Optional
+import json
 
-DB_PATH = os.path.join("backend", "database", "analysis_history.db")
+from backend.models.schemas import DetectionParameter, FineTuneConfig
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "analysis_history.db")
 
 def init_db():
     """Initialize database and create tables if not exists"""
@@ -55,6 +59,12 @@ def init_db():
         )
     """)
     
+    # Run new schema.sql
+    schema_path = os.path.join(BASE_DIR, "schema.sql")
+    if os.path.exists(schema_path):
+        with open(schema_path, "r") as f:
+            cursor.executescript(f.read())
+            
     conn.commit()
     conn.close()
     print("[Database] Initialized successfully")
@@ -254,3 +264,146 @@ def get_ai_insights(module: str | None = None, limit: int = 50) -> List[Dict]:
     except Exception as e:
         print(f"[Database] AI Insight retrieval error: {e}")
         return []
+
+def get_dataset(dataset_id: str) -> Dict:
+    """Fetch dataset by ID"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM datasets WHERE id = ?", (dataset_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        return dict(row) if row else {}
+    except Exception as e:
+        print(f"[Database] Error retrieving dataset: {e}")
+        return {}
+
+def get_all_defect_types(dataset_id: str) -> List[DetectionParameter]:
+    """Fetch all detection parameters for a dataset"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM defect_types WHERE dataset_id = ?", (dataset_id,))
+        rows = cursor.fetchall()
+        conn.close()
+        
+        params = []
+        for row in rows:
+            params.append(DetectionParameter(
+                id=row["id"],
+                name=row["name"],
+                class_id=row["class_id"],
+                confidence_threshold=row["confidence_threshold"],
+                color=row["color"],
+                enabled=True
+            ))
+        return params
+    except Exception as e:
+        print(f"[Database] Error retrieving defect types: {e}")
+        return []
+
+def insert_job(job_id: str, dataset_id: str, config: FineTuneConfig) -> bool:
+    """Insert fine-tuning job into DB"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO fine_tune_jobs 
+            (id, dataset_id, status, metrics)
+            VALUES (?, ?, ?, ?)
+        """, (
+            job_id,
+            dataset_id,
+            "queued",
+            json.dumps(config.dict())
+        ))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[Database] Error inserting job: {e}")
+        return False
+
+def update_job_progress(job_id: str, epoch: int, loss: float, val_loss: float) -> bool:
+    """Update training progress"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Fetch current metrics
+        cursor.execute("SELECT metrics FROM fine_tune_jobs WHERE id = ?", (job_id,))
+        row = cursor.fetchone()
+        metrics = json.loads(row[0]) if row and row[0] else {}
+        
+        if "history" not in metrics:
+            metrics["history"] = []
+            
+        metrics["history"].append({
+            "epoch": epoch,
+            "loss": loss,
+            "val_loss": val_loss
+        })
+        
+        cursor.execute("""
+            UPDATE fine_tune_jobs 
+            SET epochs_completed = ?, metrics = ?, status = 'training', updated_at = ?
+            WHERE id = ?
+        """, (
+            epoch,
+            json.dumps(metrics),
+            datetime.now().isoformat(),
+            job_id
+        ))
+        
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"[Database] Error updating job progress: {e}")
+        return False
+
+def register_model(job_id: str, model_path: str, metrics: Dict) -> str:
+    """Register trained model in registry, return model_id"""
+    try:
+        import uuid
+        model_id = f"mdl_{uuid.uuid4().hex[:8]}"
+        
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        model_name = f"Model from job {job_id}"
+        val_accuracy = metrics.get("val_accuracy", 0.0)
+        
+        cursor.execute("""
+            INSERT INTO model_registry 
+            (id, model_name, val_accuracy, status, model_path)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            model_id,
+            model_name,
+            val_accuracy,
+            "active",
+            model_path
+        ))
+        
+        # Mark job as completed
+        cursor.execute("""
+            UPDATE fine_tune_jobs 
+            SET status = 'completed', updated_at = ?
+            WHERE id = ?
+        """, (datetime.now().isoformat(), job_id))
+        
+        conn.commit()
+        conn.close()
+        return model_id
+    except Exception as e:
+        print(f"[Database] Error registering model: {e}")
+        return ""
+

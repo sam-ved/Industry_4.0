@@ -19,8 +19,10 @@ import ModelInputHandler from '../components/ModelInputHandler'
 import BackgroundGlow from '../components/common/BackgroundGlow'
 import AIInsightsPanel from '../components/common/AIInsightsPanel'
 import AIChatDrawer from '../components/common/AIChatDrawer'
-import { Bot } from 'lucide-react'
+import { Bot, PlayCircle } from 'lucide-react'
 import { useEffect } from 'react'
+import { SimulationWorkspace } from '../components/energy/SimulationWorkspace'
+import { useDocumentMeta } from '../hooks/useDocumentMeta'
 
 interface EnergyResult {
   total_kwh_today: number
@@ -46,6 +48,8 @@ export default function EnergyAnalytics() {
   const [insightsLoading, setInsightsLoading] = useState(false)
   const [insightsError, setInsightsError] = useState('')
   const [isChatOpen, setIsChatOpen] = useState(false)
+  const [isSimulationOpen, setIsSimulationOpen] = useState(false)
+  useDocumentMeta('Energy Analytics', 'ML-based energy prediction and optimization with consumption analysis, anomaly detection, and CO₂ tracking.')
 
   useEffect(() => {
     if (results) {
@@ -320,6 +324,16 @@ export default function EnergyAnalytics() {
                   <Download size={16} />
                   Export Report
                 </button>
+
+                {!isSimulationOpen && (
+                  <button
+                    onClick={() => setIsSimulationOpen(true)}
+                    className="w-full mt-4 py-3 px-4 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-2 text-white"
+                  >
+                    <PlayCircle size={20} />
+                    Start Simulation
+                  </button>
+                )}
               </>
             ) : (
               <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-6 flex items-center justify-center h-96 text-center">
@@ -332,6 +346,17 @@ export default function EnergyAnalytics() {
             )}
           </motion.div>
         </div>
+        
+        {/* Simulation Workspace appended at the bottom when triggered */}
+        {results && isSimulationOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <SimulationWorkspace analyzedData={results} />
+          </motion.div>
+        )}
       </div>
     </div>
   )

@@ -4,6 +4,7 @@ import io
 import numpy as np
 from PIL import Image, ImageOps
 from backend.utils.mock_data import get_ppe_mock
+from backend.config.ppe_config import HIGH_CONFIDENCE_THRESHOLD, LOW_CONFIDENCE_THRESHOLD, REQUIRED_PPE
 
 _model = None
 
@@ -11,15 +12,23 @@ def _load_model():
     global _model
     if _model is not None:
         return _model
-    model_path = os.path.join("models", "best_ppe.pt")
-    if not os.path.exists(model_path):
+    
+    onnx_path = os.path.join("models", "best_ppe.onnx")
+    pt_path = os.path.join("models", "best_ppe.pt")
+    
+    if os.path.exists(onnx_path):
+        model_path = onnx_path
+    elif os.path.exists(pt_path):
+        model_path = pt_path
+    else:
         print("[PPEService] No model file at models/best_ppe.pt — using mock data.")
         return None
+        
     try:
         # pyrefly: ignore [missing-import]
         from ultralytics import YOLO
-        _model = YOLO(model_path)
-        print("[PPEService] PPE YOLO model loaded successfully.")
+        _model = YOLO(model_path, task='detect')
+        print(f"[PPEService] PPE YOLO model loaded successfully from {model_path}.")
         return _model
     except Exception as e:
         print(f"[PPEService] Failed to load model: {e}")
@@ -46,8 +55,8 @@ def run_ppe_detection(image_bytes: bytes | None = None) -> dict:
             image = transposed
         image = image.convert("RGB")
         w, h = image.size
-        img_array = np.array(image)
-        results = model(img_array, verbose=False)[0]
+        # Pass PIL image directly to YOLO to handle RGB->BGR correctly
+        results = model(image, conf=0.25, verbose=False)[0]
 
         all_detections = []
         for box in results.boxes:
@@ -62,54 +71,95 @@ def run_ppe_detection(image_bytes: bytes | None = None) -> dict:
                 "bbox": [round(x1, 2), round(y1, 2), round(x2, 2), round(y2, 2)]
             })
 
-        # Build compliance summary from detections
-        has_helmet = any("helmet" in d["label"] and "no_" not in d["label"] for d in all_detections)
-        has_vest   = any("vest" in d["label"]   and "no_" not in d["label"] for d in all_detections)
-        has_gloves = any("gloves" in d["label"] and "no_" not in d["label"] for d in all_detections)
-        compliant  = has_helmet and has_vest
-
         import time
         start_time = time.time()
         
-        equipment_counts = {}
-        equipment_confidences = {}
+        # Build deterministic compliance status from detections
+        ppe_status_dict = {}
+        for req in REQUIRED_PPE:
+            ppe_status_dict[req.capitalize()] = "NOT DETECTED"
+            
+        best_confidences = {}
         
         for d in all_detections:
             if "no_" in d["label"]:
-                continue # Skip "no_helmet" etc for detected equipment list
-            label = d["label"].capitalize()
-            if label not in equipment_counts:
-                equipment_counts[label] = 0
-                equipment_confidences[label] = []
-            equipment_counts[label] += 1
-            equipment_confidences[label].append(d["confidence"])
-            
-        equipment_detected = []
-        for label, count in equipment_counts.items():
-            equipment_detected.append({
-                "name": label,
-                "count": count,
-                "confidence": round(sum(equipment_confidences[label]) / count, 3)
-            })
-            
-        required = ["Helmet", "Vest", "Gloves"]
-        missing_equipment = []
-        for req in required:
-            if req not in equipment_counts:
-                missing_equipment.append(req)
+                continue
                 
-        compliance_percentage = 100.0 if not missing_equipment else (len(required) - len(missing_equipment)) / len(required) * 100.0
+            label = d["label"].capitalize()
+            if label not in best_confidences:
+                best_confidences[label] = d["confidence"]
+            else:
+                best_confidences[label] = max(best_confidences[label], d["confidence"])
+                
+        for req in REQUIRED_PPE:
+            req_cap = req.capitalize()
+            if req_cap in best_confidences:
+                conf = best_confidences[req_cap]
+                if conf >= HIGH_CONFIDENCE_THRESHOLD:
+                    ppe_status_dict[req_cap] = "DETECTED"
+                elif conf >= LOW_CONFIDENCE_THRESHOLD:
+                    ppe_status_dict[req_cap] = "NEEDS REVIEW"
+                else:
+                    ppe_status_dict[req_cap] = "NOT DETECTED"
+                    
+        # Calculate Risk and overall Status
+        compliance_status = "COMPLIANT"
+        risk_level = "LOW"
+        missing_items = []
+        review_items = []
+        detected_items = []
+        
+        for req_cap, status in ppe_status_dict.items():
+            if status == "NOT DETECTED":
+                missing_items.append(req_cap)
+            elif status == "NEEDS REVIEW":
+                review_items.append(req_cap)
+            elif status == "DETECTED":
+                detected_items.append(req_cap)
+                
+        if missing_items:
+            compliance_status = "NON-COMPLIANT"
+            risk_level = "HIGH"
+        elif review_items:
+            compliance_status = "NEEDS REVIEW"
+            risk_level = "MEDIUM"
+            
+        if len(all_detections) == 0:
+            compliance_status = "NEEDS REVIEW"
+            risk_level = "MEDIUM"
+            
+        # Deterministic reasoning
+        if compliance_status == "COMPLIANT":
+            reasoning = "All required PPE items were detected."
+        elif compliance_status == "NON-COMPLIANT":
+            items_str = " and ".join(missing_items) if len(missing_items) <= 2 else ", ".join(missing_items[:-1]) + ", and " + missing_items[-1]
+            verb = "were" if len(missing_items) > 1 else "was"
+            reasoning = f"{items_str} {verb} not detected. Worker should wear missing PPE before entering the monitored area."
+        else:
+            if len(all_detections) == 0:
+                reasoning = "No reliable PPE detection was obtained from this image."
+            else:
+                reasoning = "Some PPE items need review due to low confidence."
         
         proc_time = int((time.time() - start_time) * 1000)
+        
+        # Backward compatibility for dashboard summary
+        compliance_pct = 100.0 if not missing_items else ((len(REQUIRED_PPE) - len(missing_items)) / len(REQUIRED_PPE)) * 100.0
+        violation_count = len(missing_items)
 
         return {
-            "compliance_pct": round(compliance_percentage, 1),
-            "equipment_detected": equipment_detected,
-            "missing_equipment": missing_equipment,
+            "compliance_pct": round(compliance_pct, 1),
+            "violation_count": violation_count,
+            "compliance_status": compliance_status,
+            "risk_level": risk_level,
+            "ppe_status_dict": ppe_status_dict,
+            "reasoning": reasoning,
+            "detected_items": detected_items,
+            "missing_items": missing_items,
+            "review_items": review_items,
             "processing_time_ms": proc_time,
-            "llm_insights": "Action required: Some workers are missing PPE." if missing_equipment else "All required PPE detected successfully.",
             "source": "model",
-            "frame_compliant": compliant,
+            "frame_compliant": compliance_status == "COMPLIANT",
             "all_detections": all_detections,
             "image_width": w,
             "image_height": h

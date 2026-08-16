@@ -192,8 +192,8 @@ export interface MLRunConfig {
   file_id: string
   target_column?: string
   features: string[]
-  algorithm: string
-  task_type: string
+  algorithm?: string
+  task_type?: string
 }
 
 export const mlStudioAPI = {
@@ -226,6 +226,62 @@ export const mlStudioAPI = {
     const response = await apiClient.post('/ml-studio/insights', { results })
     return response.data
   },
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// AI REASONING
+// ──────────────────────────────────────────────────────────────────────────
+export const reasoningAPI = {
+  /** Run full reasoning pipeline from raw ML Studio results */
+  analyzeFromResults: async (results: Record<string, unknown>[], useLlm = true) => {
+    const response = await apiClient.post('/api/reasoning/from-results', {
+      results,
+      use_llm: useLlm,
+    }, { timeout: 120000 })
+    return response.data
+  },
+
+  /** Run reasoning from pre-built ModelFinding objects */
+  analyze: async (findings: Record<string, unknown>[], useLlm = true) => {
+    const response = await apiClient.post('/api/reasoning', {
+      findings,
+      use_llm: useLlm,
+    }, { timeout: 120000 })
+    return response.data
+  },
+
+  /** Health check for reasoning subsystem */
+  health: async () => {
+    const response = await apiClient.get('/api/reasoning/health')
+    return response.data
+  },
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// REPORTS
+// ──────────────────────────────────────────────────────────────────────────
+export const generateReport = async (payload: any, format: string) => {
+  const response = await apiClient.post(`/reports/download/${format}`, payload, {
+    responseType: 'blob',
+    timeout: 120000,
+  });
+  
+  // Download logic
+  const blob = new Blob([response.data]);
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  
+  let extension = format;
+  if (format === 'excel') extension = 'xlsx';
+  
+  a.download = `industry4_report.${extension}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+  
+  return true;
 }
 
 // ──────────────────────────────────────────────────────────────────────────

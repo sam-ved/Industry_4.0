@@ -17,19 +17,21 @@ import BackgroundGlow from '../components/common/BackgroundGlow';
 import DatasetUploader from '../components/MLStudio/DatasetUploader';
 import DatasetPreview from '../components/MLStudio/DatasetPreview';
 import FeatureSelector from '../components/MLStudio/FeatureSelector';
-import AlgorithmSelector from '../components/MLStudio/AlgorithmSelector';
+import TaskSelector from '../components/MLStudio/TaskSelector';
 import ResultsPanel from '../components/MLStudio/ResultsPanel';
 import { mlStudioAPI } from '../services/api';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 const STEPS = [
   { label: 'Dataset', icon: Upload },
   { label: 'Features', icon: Columns },
-  { label: 'Algorithm', icon: BrainCircuit },
+  { label: 'Task Type', icon: BrainCircuit },
   { label: 'Results', icon: BarChart2 },
 ] as const;
 
 export default function MLStudio() {
   const navigate = useNavigate();
+  useDocumentMeta('AutoML Studio', 'Upload datasets, engineer features, and train custom machine learning models interactively with AutoML.');
 
   const [uploadSession, setUploadSession] = useState(0);
   const [datasetData, setDatasetData] = useState<any>(null);
@@ -45,45 +47,56 @@ export default function MLStudio() {
 
   const isSupervisedTask = config.taskType === 'classification' || config.taskType === 'regression';
   const selectedFeatureCount = config.features.length;
+  
+  // A configuration is ready if we have a dataset and at least one feature
+  // Unsupervised tasks don't need a target. Supervised tasks do.
   const configurationReady = Boolean(
     datasetData &&
     selectedFeatureCount > 0 &&
     (!isSupervisedTask || config.targetColumn)
   );
+
   const canRunAnalysis = Boolean(
-    datasetData &&
-    config.algorithm &&
     configurationReady &&
+    config.taskType &&
+    config.algorithm &&
     !isRunning
   );
 
   const runBlockedReason = useMemo(() => {
     if (!datasetData) return 'Upload a dataset to continue.';
     if (selectedFeatureCount === 0) return 'Select at least one feature.';
-    if (!config.algorithm) return 'Choose an algorithm.';
     if (isSupervisedTask && !config.targetColumn) {
       return 'Select a target variable for classification or regression.';
     }
+    if (!config.taskType) return 'Select a task type to continue.';
+    if (!config.algorithm) return 'Select an algorithm to continue.';
     return null;
-  }, [config.algorithm, config.targetColumn, datasetData, isSupervisedTask, selectedFeatureCount]);
+  }, [config.targetColumn, config.taskType, config.algorithm, datasetData, isSupervisedTask, selectedFeatureCount]);
 
   const stepStatuses = useMemo(() => {
     const hasDataset = Boolean(datasetData);
-    const hasAlgorithm = Boolean(config.algorithm) && configurationReady;
+    const hasTask = Boolean(config.taskType) || configurationReady;
 
     return [
       { complete: hasDataset, active: !hasDataset },
       { complete: configurationReady, active: hasDataset && !configurationReady },
-      { complete: hasAlgorithm, active: configurationReady && !config.algorithm },
-      { complete: Boolean(results), active: isRunning || (hasAlgorithm && !results) },
+      { complete: hasTask, active: configurationReady && !hasTask },
+      { complete: Boolean(results), active: isRunning || (hasTask && !results) },
     ];
-  }, [config.algorithm, configurationReady, datasetData, isRunning, results]);
+  }, [config.taskType, configurationReady, datasetData, isRunning, results]);
 
   const handleUploadSuccess = useCallback((data: any) => {
     setDatasetData(data);
     setResults(null);
     setRunError(null);
-    setConfig({ targetColumn: '', features: [], algorithm: '', taskType: '' });
+    
+    // Auto-select likely target if available
+    const likelyTarget = (data.likely_targets && data.likely_targets.length > 0) 
+      ? data.likely_targets[0] 
+      : '';
+      
+    setConfig({ targetColumn: likelyTarget, features: [], algorithm: '', taskType: '' });
   }, []);
 
   const handleRunAnalysis = useCallback(async () => {
@@ -98,21 +111,41 @@ export default function MLStudio() {
     }, 100);
 
     try {
+      // Exclude target column from features if accidentally included
+      const finalFeatures = config.targetColumn 
+        ? config.features.filter((f: string) => f !== config.targetColumn)
+        : config.features;
+        
       const res = await mlStudioAPI.run({
         file_id: datasetData.file_id,
         target_column: config.targetColumn || undefined,
-        features: config.features,
-        algorithm: config.algorithm,
-        task_type: config.taskType,
+        features: finalFeatures,
+        task_type: config.taskType || undefined,
+        algorithm: config.algorithm || undefined,
       });
-      setResults(res.data);
+
+      const data = res.data;
+
+      // Handle structured error responses from the backend
+      if (data?.success === false || res.status === 'error') {
+        const errorData = data || res.data;
+        setResults(errorData);
+      } else {
+        setResults(data);
+      }
+
       setTimeout(() => {
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
       }, 100);
     } catch (err: any) {
-      const msg = err.response?.data?.detail || err.message || 'Analysis failed';
-      setRunError(msg);
-      setResults(null);
+      // Network / timeout errors
+      const errData = err.response?.data?.data;
+      if (errData?.success === false) {
+        setResults(errData);
+      } else {
+        const msg = err.response?.data?.detail || err.message || 'Analysis failed';
+        setRunError(msg);
+      }
     } finally {
       setIsRunning(false);
     }
@@ -220,7 +253,7 @@ export default function MLStudio() {
               </div>
 
               <div className="border-t border-[rgba(255,255,255,0.05)] pt-10">
-                <AlgorithmSelector
+                <TaskSelector
                   config={config}
                   setConfig={setConfig}
                   isRunning={isRunning}

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Area,
@@ -9,23 +10,24 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { AlertTriangle, Cpu, ShieldCheck, Sparkles, TrendingUp } from 'lucide-react'
+import { AlertTriangle, Cpu, ShieldCheck, Sparkles, TrendingUp, ArrowLeft } from 'lucide-react'
 import Card from '../components/common/Card'
 import KpiCard from '../components/common/KpiCard'
-import { defectAPI, llmAPI } from '../services/api'
+import { defectAPI } from '../services/api'
 import { Loader2, Play } from 'lucide-react'
-import { useEffect } from 'react'
 
 import UploadDropzone from '../components/common/UploadDropzone'
 import AIInsightsPanel from '../components/common/AIInsightsPanel'
 import AIChatDrawer from '../components/common/AIChatDrawer'
 import { Bot } from 'lucide-react'
+import { useDocumentMeta } from '../hooks/useDocumentMeta'
 
 interface Detection {
   bbox: [number, number, number, number];
   defect_type: string;
   confidence: number;
   severity: string;
+  reasoning?: string;
 }
 
 interface DefectResult {
@@ -40,7 +42,7 @@ interface ImageItem {
   file: File;
   previewUrl: string;
   result: DefectResult | null;
-  llm_insights: string | null;
+  llm_insights: any | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -130,35 +132,14 @@ const itemVariant = {
 }
 
 export default function DefectDetection() {
+  const navigate = useNavigate()
   const [images, setImages] = useState<ImageItem[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
 
   const activeImage = images[activeIndex]
 
-  const [insights, setInsights] = useState(null)
-  const [insightsLoading, setInsightsLoading] = useState(false)
-  const [insightsError, setInsightsError] = useState('')
   const [isChatOpen, setIsChatOpen] = useState(false)
-
-  useEffect(() => {
-    if (activeImage?.result) {
-      const fetchInsights = async () => {
-        setInsightsLoading(true)
-        setInsightsError('')
-        try {
-          const res = await llmAPI.explain('steel', activeImage.result as unknown as Record<string, unknown>)
-          setInsights(res.explanation)
-        } catch (err) {
-          setInsightsError('Failed to load AI Insights.')
-        } finally {
-          setInsightsLoading(false)
-        }
-      }
-      fetchInsights()
-    } else {
-      setInsights(null)
-    }
-  }, [activeImage?.result])
+  useDocumentMeta('Steel Defect Detection', 'AI-powered steel surface defect detection using YOLOv8 with confidence metrics, severity grading, and real-time inspection.')
 
   const handleFilesChange = (filesArray: File[]) => {
     const newImages: ImageItem[] = filesArray.map(file => ({
@@ -208,6 +189,15 @@ export default function DefectDetection() {
   return (
     <div className="min-h-screen bg-[#070b14] text-gray-100">
       <div className="mx-auto max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8">
+        <div className="mb-6">
+          <button
+            onClick={() => navigate('/')}
+            className="inline-flex items-center gap-2 rounded-lg bg-white/5 px-3 py-2 text-sm font-medium text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <ArrowLeft size={16} />
+            Back to Dashboard
+          </button>
+        </div>
         <div className="mb-8 grid gap-6 md:grid-cols-[1.8fr_auto]">
           <div className="space-y-3">
             <p className="text-xs uppercase tracking-[0.4em] text-cyan-300/70">
@@ -278,7 +268,7 @@ export default function DefectDetection() {
                         onClick={() => setActiveIndex(idx)}
                         className={`relative w-20 h-20 flex-shrink-0 rounded-lg cursor-pointer border-2 transition-all overflow-hidden ${activeIndex === idx ? 'border-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.4)]' : 'border-transparent opacity-60 hover:opacity-100'}`}
                       >
-                        <img src={img.previewUrl} className="w-full h-full object-cover" />
+                        <img src={img.previewUrl} alt={`Uploaded inspection image ${idx + 1}`} className="w-full h-full object-cover" />
                         {img.result && <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,113,0.8)]" />}
                       </div>
                     ))}
@@ -290,6 +280,7 @@ export default function DefectDetection() {
                       <div className="relative w-full overflow-hidden rounded-[16px] bg-black/20 group">
                         <img 
                           src={activeImage.previewUrl} 
+                          alt="Steel surface under inspection — active preview"
                           className="w-full max-h-[500px] object-contain" 
                         />
                         
@@ -391,9 +382,9 @@ export default function DefectDetection() {
                 </div>
               ) : (
                 <AIInsightsPanel 
-                  isLoading={insightsLoading} 
-                  insights={insights} 
-                  error={insightsError} 
+                  isLoading={activeImage.isLoading} 
+                  insights={activeImage.llm_insights} 
+                  error={activeImage.error || ''} 
                 />
               )}
             </Card>
@@ -445,6 +436,11 @@ export default function DefectDetection() {
                               {DisplaySeverity}
                             </span>
                           </div>
+                          {item.reasoning && (
+                            <div className="mt-3 text-sm text-cyan-200/90 border-l-2 border-cyan-500/50 pl-3 italic">
+                              {item.reasoning}
+                            </div>
+                          )}
                           <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/5">
                             <div
                               className="h-full rounded-full bg-cyan-400"

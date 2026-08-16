@@ -1,0 +1,428 @@
+PROJECT HANDOVER & FINAL REVIEW INTELLIGENCE
+============================================
+
+1. PROJECT IDENTITY
+-------------------
+* Project Title: Industry 4.0 AI Control Center (also referred to as ML Studio (Self-Training) / Fine-Tuning Studio in self-training contexts).
+* Project Type: Industrial AI, Computer Vision, Predictive Maintenance, Energy Analytics, Digital Twin simulation, AutoML, and Decision-Support (Reasoning AI) Platform.
+* Core Objective: To provide a unified, enterprise-grade control center that integrates edge computer vision, time-series telemetry analysis, physical digital twin simulations, and custom AutoML workspaces with a multi-model reasoning system. It provides factory operators, safety officers, reliability engineers, and plant managers with real-time anomaly alerts, predictive failure timelines, safety audits, and automated recommendations explaining why decisions are made.
+* Target Users: Plant Managers, Reliability Engineers, Safety Auditors, Energy Management Consultants, and Industrial Data Scientists.
+
+2. PROBLEM STATEMENT
+--------------------
+Modern manufacturing plants generate massive, siloed streams of multimodal data (high-speed camera feeds of steel sheets, CCTV feeds of personnel zones, grid/solar power meters, and rotating machinery sensors). However, they lack a unified system that can:
+1. Bridge the multimodal gap: Simultaneously run visual object detection (defect/safety) and telemetry-based forecasting (energy/downtime).
+2. Mitigate black-box predictions: Provide physical and operational explanations for why a machine has a low remaining useful life (RUL) or why energy consumption spiked.
+3. Empower non-technical operators: Allow users to train custom models (AutoML/fine-tuning) on their own CSV/image datasets without writing Python training scripts.
+4. Coordinate multi-model consensus: Fuses predictions from different models (e.g. classifier anomaly flag vs regression prediction) and resolves conflicting outputs.
+
+3. OBJECTIVE
+------------
+The primary objective of the Industry 4.0 AI Control Center is to build a centralized, dark-themed control system that integrates four distinct core modules, a digital twin simulation engine, and an AutoML/fine-tuning dashboard. The system must process real-time uploads (images, videos, CSV data), execute real-time local machine learning inference (via YOLOv8, XGBoost, and scikit-learn models), and output automated, rule-based, and LLM-enhanced narrative reports containing clear root causes, operational risks, and step-by-step remediation plans.
+
+4. PROPOSED SOLUTION
+--------------------
+The platform implements a multi-tier solution:
+1. Multimodal Core Modules:
+   * Steel Defect Detection: Detects surface defects (scratches, dents, cracks, corrosion) on steel sheets using YOLOv8 models.
+   * PPE Compliance Monitor: Audits workers for safety equipment compliance (helmets, vests, gloves, boots) using YOLOv8-based object detection.
+   * Energy Analytics: Inspects energy consumption profiles and flags anomalies using Random Forest models and IQR filters.
+   * Predictive Maintenance: Predicts fleet health scores, remaining useful life, and anomaly statuses using XGBoost models and Isolation Forest classifiers.
+2. Digital Twin Scenario & Simulation Engine: A physical scenario simulator that models production growth, machine efficiency, renewable energy mix, shift planning, demand forecasts, carbon footprints, cost optimization, and capacity constraints using a customized physics/formula engine, sensitivity analyzers, and Monte Carlo runs.
+3. AutoML Tabular Studio: A wizard allowing users to upload tabular CSV files, select target variables, automatically profile data quality, get heuristic-based feature suggestions, and train/compare multiple algorithms (Random Forest, Gradient Boosting, Linear/Logistic Regression, KMeans) in parallel.
+4. Custom YOLOv8 Fine-Tuning Studio: A self-training workspace where users can upload custom annotated object detection datasets and queue training runs (using PyTorch and CUDA) in the background via Celery and Redis.
+5. AI Decision Intelligence Reasoning Layer: A multi-step processing engine that parses model outputs, evaluates deterministic rules, calculates consensus among models, computes a fused confidence score, infers root causes, and generates actionable, priority-sorted recommendations, which are then summarized into a natural narrative by a Groq-hosted Llama-3.1-8b-instant LLM.
+
+5. SYSTEM OVERVIEW
+------------------
+* User Interaction:
+  1. The user logs into the dark-themed dashboard showing KPIs, active alert streams, overall system health status, and module cards.
+  2. The user navigates to a module and uploads files (e.g., steel sheet images, worker CCTV snapshots, plant electricity CSVs, or predictive maintenance telemetry).
+  3. The system performs real-time file validation (verifying sizes under 10MB/50MB and matching extensions).
+* Data Flow:
+  [User File Upload] (Image/CSV)
+        ↓
+  [API Layer / Route Handlers] (FastAPI)
+        ↓
+  [Validation & In-Memory Dataset Cache]
+        ↓
+  [Pre-processors] (StandardScaler, LabelEncoder, OneHotEncoder)
+        ↓
+  [ML Models / Inference Engines] (YOLOv8 ONNX/PyTorch, XGBoost pkl, RF pkl)
+        ↓
+  [Analytics Algorithms] (Isolation Forest, IQR Spikes, Linear Degradation)
+        ↓
+  [Reasoning Layer Orchestrator]
+     ├── 1. Evidence Collector (Stitch standard ModelFinding payloads)
+     ├── 2. Rule Engine (Evaluate compliance, defect rates, temperature limits)
+     ├── 3. Consensus Engine (Assess model agreement, highlight conflicts)
+     ├── 4. Confidence Engine (Fuse model confidence with dataset constraints)
+     ├── 5. Root Cause Engine (Deduce operational failures and parameters)
+     ├── 6. Recommendation Engine (Generate prioritized action checklists)
+     └── 7. Report Generator (Build structured Markdown/JSON reports)
+        ↓
+  [LLM Enhancer] (Groq Llama-3.1-8b-instant API) ──> (SQLite MD5 Hashed Cache)
+        ↓
+  [Frontend UI View & Exporter] (Interactive plots, Recharts, PDF/DOCX/Excel/CSV downloads)
+
+6. COMPLETE FEATURE INVENTORY
+-----------------------------
+* Feature 1: Dashboard KPIs & Trend Visualizations
+  - Purpose: Display overall plant diagnostics.
+  - Frontend location: Dashboard.tsx
+  - Backend location: /dashboard/summary in main.py
+  - Status: IMPLEMENTED
+  - User flow: Automatically fetches on mount.
+  - Dependencies: dashboardAPI, Recharts
+  - Tech details: Renders aggregates of defect rates, compliance percentage, and machine alerts.
+* Feature 2: Steel Defect Detection (YOLOv8)
+  - Purpose: Spot steel sheet defects in real time.
+  - Frontend location: DefectDetection.tsx
+  - Backend location: defect.py (routes)
+  - Status: WORKING WITH LIMITATIONS (Uses mock if weights are missing)
+  - User flow: Upload image -> Run -> Bounding box overlay and list of defects.
+  - Dependencies: ultralytics (YOLO), Pillow, Groq API (individual explanations)
+  - Tech details: Checks models/best.pt or models/best.onnx. Uses minute-seeded random fallback.
+* Feature 3: PPE Compliance Monitoring (YOLOv8 PPE)
+  - Purpose: Audit personnel zone safety compliance.
+  - Frontend location: PPEMonitoring.tsx
+  - Backend location: ppe.py (routes)
+  - Status: WORKING WITH LIMITATIONS (Uses mock if weights are missing)
+  - User flow: Upload person image/video -> Run -> Compliance checklist & alerts.
+  - Dependencies: ultralytics (YOLO), Pillow, Groq API
+  - Tech details: Detects helmet, vest, gloves, boots. Flags non-compliance and risk status.
+* Feature 4: Energy Consumption Analytics
+  - Purpose: Spot peak loads and telemetry anomalies.
+  - Frontend location: EnergyAnalytics.tsx
+  - Backend location: energy.py (routes)
+  - Status: IMPLEMENTED
+  - User flow: Upload consumption CSV -> Interactive charts of peak hours.
+  - Dependencies: pandas, numpy, joblib (rf_model.pkl)
+  - Tech details: Applies IQR filter on hourly data to extract spikes.
+* Feature 5: Predictive Maintenance (XGBoost RUL)
+  - Purpose: Predict remaining useful life (RUL) and fleet anomalies.
+  - Frontend location: PredictiveMaintenance.tsx
+  - Backend location: maintenance.py (routes)
+  - Status: IMPLEMENTED
+  - User flow: Upload vibration/temp CSV -> Fleet average health overview.
+  - Dependencies: xgboost, joblib (rul_xgb_regressor.pkl), scikit-learn (IsolationForest)
+  - Tech details: IsolationForest maps sensor anomalies. XGBoost regressor estimates RUL days.
+* Feature 6: Digital Twin What-If Scenarios
+  - Purpose: Model operational changes before deployment.
+  - Frontend location: SimulationDashboard.tsx
+  - Backend location: simulation_routes.py (routes)
+  - Status: IMPLEMENTED
+  - User flow: Slide production limit/renewable energy percentage -> Run.
+  - Tech details: Runs mathematical models of carbon footprint and grid tariffs.
+* Feature 7: Monte Carlo Risk Simulation
+  - Purpose: Risk management via randomized inputs.
+  - Frontend location: SimulationDashboard.tsx
+  - Backend location: simulation_routes.py (routes)
+  - Status: IMPLEMENTED
+  - User flow: Slide sliders -> Select MC iterations (default 1000) -> View statistics.
+  - Tech details: Adds Gaussian noise to expected production or efficiency parameters.
+* Feature 8: AutoML Tabular Studio
+  - Purpose: Allow users to build models on CSVs without code.
+  - Frontend location: MLStudio.tsx
+  - Backend location: ml_studio.py (routes)
+  - Status: IMPLEMENTED
+  - User flow: Upload CSV -> Select Target -> Select Algorithm -> Leaderboard.
+  - Dependencies: scikit-learn, pandas, numpy
+  - Tech details: Parallel execution pool with 30s per-model timeouts.
+* Feature 9: YOLOv8 Fine-Tuning Studio
+  - Purpose: Background model self-training pipeline.
+  - Frontend location: FineTuning.tsx
+  - Backend location: fine_tune.py (routes)
+  - Status: IMPLEMENTED (Requires active Celery worker)
+  - User flow: Upload dataset folder -> Select parameters -> Click train -> View epoch curves.
+  - Dependencies: celery, redis, ultralytics, torch
+  - Tech details: Fits backbone YOLOv8 on custom class labels in background.
+* Feature 10: AI Decision Intelligence (Reasoning)
+  - Purpose: Multi-model output fusion.
+  - Frontend location: AIReasoning.tsx
+  - Backend location: reasoning.py (routes)
+  - Status: IMPLEMENTED
+  - User flow: Feed JSON ML results -> View agreement, root cause, and prioritized actions.
+  - Dependencies: groq, sqlite3
+  - Tech details: Evidence collector fusions evaluated against deterministic rule logs.
+* Feature 11: Conversational AI Chat Assistant
+  - Purpose: Help users understand active data context.
+  - Frontend location: AIChatDrawer.tsx
+  - Backend location: llm.py (routes)
+  - Status: IMPLEMENTED
+  - User flow: Click float chat bubble -> Type question -> View context-aware answer.
+  - Dependencies: groq (llama-3.1-8b-instant)
+  - Tech details: Passes prediction JSON metadata to system prompts.
+* Feature 12: Enterprise Exporter
+  - Purpose: Download operational logs and reports.
+  - Frontend location: UI download actions
+  - Backend location: reports.py (routes)
+  - Status: IMPLEMENTED
+  - User flow: Click export -> Choose format -> Download.
+  - Dependencies: fpdf, python-docx, xlsxwriter
+  - Tech details: Generates binary streams of PDF, DOCX, XLSX, CSV, HTML, MD, JSON.
+
+7. FRONTEND AUDIT
+-----------------
+* Framework: React 18 with Vite dev server.
+* Language: TypeScript (.tsx and .ts) for components, pages, and hooks.
+* Styles: Dark theme cybernetic custom CSS.
+* Screens audited:
+  1. Main Dashboard: Displays total defects today, compliance %, energy KPIs, system health score, alert feed, and Recharts trend lines.
+  2. Steel Defect Detection: Displays visual bbox overlays, severity classifications, and short explanations for each box.
+  3. PPE Compliance: Displays compliance checklists, violation counts, and zone-specific reports.
+  4. Energy Analytics: Displays peak loads, carbon offset statistics, machine consumption breakdowns, and detected spikes.
+  5. Predictive Maintenance: Displays average fleet RUL, critical warning cards, and Isolation Forest anomaly lists.
+  6. Models Hub: Three-column layout showing models (left), upload zones (center), and history latency trends (right).
+  7. AutoML Studio: Four-step wizard for profiling, selecting features, choosing tasks, and comparing leaderboard models.
+  8. Fine-Tuning Studio: Five tabs for dataset preparation, config files, training progress monitors, registry deploy, and parametrized inference.
+  9. Simulation Dashboard: Twin state cards, slider parameters, what-if curves, Monte Carlo confidence margins, and optimization logs.
+  10. AI Reasoning: Risk banners, multi-model consensus matrices, root cause narratives, rule evaluations, and recommendations.
+
+8. BACKEND AUDIT
+----------------
+* Framework: FastAPI.
+* Database: local SQLite database (analysis_history.db).
+* Tables in DB: datasets, defect_types, fine_tune_jobs, model_registry, inference_results, automl_models, analysis_history, model_cache, ai_insights.
+* Health Check: /health endpoint returns online status and UTC timestamp.
+* Background queue: Celery with Redis broker (celery_app.py).
+* Caching: local sqlite caching key-value table matching MD5 parameter hashes.
+* Serialization: make_json_safe cleans up NaN/Infinity values to prevent JSON errors.
+
+9. MACHINE LEARNING / AI AUDIT
+------------------------------
+* Steel Defect Detector:
+  - Model ID: defect_detection
+  - Class: YOLOv8 object detection.
+  - Weights: models/best.pt (6.7MB) or models/best.onnx (13.5MB).
+  - Target defects: scratch, dent, crack, corrosion.
+* PPE Compliance:
+  - Model ID: ppe_monitoring
+  - Class: YOLOv8 object detection.
+  - Weights: models/best_ppe.pt (22.5MB) or models/best_ppe.onnx (44.9MB).
+  - Target equipment: helmet, vest, gloves, boots.
+* Telemetry RUL Predictor:
+  - Model ID: rul_prediction
+  - Class: XGBoost Regressor.
+  - Weights: models/rul_xgb_regressor.pkl, feature_scaler.pkl, le_machine.pkl.
+  - Output: Estimated days to failure based on vibration and temperature.
+* Telemetry Alert Classifier:
+  - Model ID: alert_detection
+  - Class: XGBoost Classifier.
+  - Weights: models/alert_xgb_classifier.pkl.
+  - Output: Anomaly alert probability.
+* AutoML algorithms: Random Forest, HistGradientBoosting, Ridge, Logistic/Linear Regression, KMeans.
+* LLM reasoner: Groq llama-3.1-8b-instant. Used to explain anomalies, dashboard executive summaries, twin optimizations, and chat questions.
+
+10. PPE / COMPUTER VISION WORK
+------------------------------
+* Real YOLOv8 loading is configured.
+* Weights exist in models/ for both defect detection and PPE compliance.
+* If ultralytics is installed, the system runs real ONNX/PyTorch inference.
+* Fallback checks utilize minute-seeded random fallbacks to maintain consistency across page reloads.
+* Compliance audits safety gear using confidence thresholds (Helmet 0.80, Vest 0.75, Gloves 0.70).
+
+11. AUTOML STUDIO
+-----------------
+* Users upload arbitrary CSV datasets.
+* Imputes missing values, encodes categories, scales numerical features, and applies PCA.
+* AutoML trains multiple models in parallel with a 30s timeout per algorithm.
+* Ranks trained models on a leaderboard compared to dummy baselines.
+* Generates PCA explained variance plots and outputs rule-based data quality warnings.
+
+12. ALGORITHM IMPLEMENTATION
+----------------------------
+* Steel defect: YOLOv8 models.
+* PPE compliance: YOLOv8 models.
+* Energy analytics: Random Forest model (rf_model.pkl) is loaded, but peak anomaly detection is calculated using IQR.
+* Predictive maintenance: XGBoost models are loaded, while fleet-wide anomalies are flagged using Isolation Forest.
+* AutoML: Fits real scikit-learn and HistGradientBoosting models.
+* Reasoning AI: Deterministic rules (imbalance checks, range violations, consensus metrics) are evaluated locally, and then summarized using Llama-3.1.
+
+13. DATA PROCESSING
+-------------------
+* Reads CSV, XLSX, and JSON files via Pandas.
+* Imputes missing values (median for numericals, most frequent for categoricals).
+* Encodes categorical columns using OneHotEncoder.
+* Normalizes numerical features using StandardScaler.
+* Projects features using PCA to a target variance threshold (default 95%).
+
+14. REASONING AI
+----------------
+* The decision engine runs the following pipeline:
+  Model Predictions -> Evidence Collector -> Rule Evaluator -> Consensus Agreement -> Fused Confidence -> Root Cause -> Prioritized Recommendations -> Natural Narrative (via Llama-3.1).
+* Checks for consensus among models to spot conflicting outputs.
+* Narrative generator queries the Groq API and falls back to a deterministic summary builder if the API is unavailable.
+
+15. UI/UX EVOLUTION
+-------------------
+* Redesigned the dashboard from simple, unaligned cards to a dark-themed slate layout.
+* Replaced static tables with Recharts trend lines.
+* Integrated AI Reasoning panels (consensus matrices, confidence dials, recommendations).
+* Added active status monitors to check backend connection status.
+
+16. DEVELOPMENT CHALLENGES & FIXES
+----------------------------------
+* Port Conflict crashes: Added a socket checker in main.py that verifies port 8000 is open before startup, exiting gracefully if it is occupied.
+* LLM API Migration: Migrated from Anthropic Claude to Groq Llama for lower latencies.
+* Unpickling issues: Added fallback code in model_loader.py to prevent crashes if pickled scalers fail to load.
+
+17. PERFORMANCE & OPTIMIZATION
+------------------------------
+* Large datasets are downsampled to 10,000 rows to maintain responsive UI load times.
+* Feature suggestion calculations are limited to 5,000 rows.
+* AutoML models are trained in parallel using thread pools.
+* LLM responses are cached in SQLite using MD5 hashes of the inputs as keys.
+
+18. SYSTEM ARCHITECTURE
+-----------------------
+* Decoupled frontend/backend setup:
+  React UI (Vite, TypeScript) -> API Client (Axios) -> FastAPI -> SQLite Database.
+  Backend routes requests to the inference services (YOLO, XGBoost), the simulation engines, or the reasoning layer (which calls the Groq API).
+
+19. TECHNOLOGY STACK
+--------------------
+* Frontend: React 18, TypeScript, Vite, Tailwind/Vanilla CSS, Recharts, Framer Motion, Lucide icons.
+* Backend: FastAPI, Uvicorn, SQLite3, Celery, Redis.
+* ML & CV: Ultralytics YOLOv8, PyTorch, Torchvision, ONNX Runtime, scikit-learn, XGBoost, Pandas, NumPy.
+* Explainability: Groq SDK (Llama-3.1-8b-instant).
+* Reporting: FPDF, python-docx, xlsxwriter, markdown.
+
+20. PROJECT EVOLUTION / TIMELINE
+--------------------------------
+* Phase 1: Concept dashboard.
+* Phase 2: React/FastAPI setup.
+* Phase 3: YOLOv8 defect and PPE detection.
+* Phase 4: Telemetry RUL and energy analytics.
+* Phase 5: AutoML tabular studio.
+* Phase 6: Reasoning AI layer.
+* Phase 7: Digital Twin simulator and Monte Carlo runs.
+
+21. CURRENT STATUS
+------------------
+* Frontend: GREEN (polished TypeScript UI)
+* Backend: GREEN (FastAPI with health checks)
+* AutoML: GREEN (leaderboards and PCA plots)
+* Computer Vision: YELLOW (works, but falls back to mock if weights are missing)
+* PPE compliance: YELLOW (works, but falls back to mock if weights are missing)
+* Reasoning AI: GREEN (multi-model reasoning with rule-based fallbacks)
+* Database: GREEN (SQLite schema initialized)
+* Deployment: YELLOW (Docker compose files exist, but no deployment scripts)
+* Authentication: GRAY (placeholders exist, but login flows are not implemented)
+
+22. DEMO-READY FEATURES
+-----------------------
+1. AutoML Leaderboard: Upload a CSV, select target columns, run models, and compare metrics.
+2. AI Reasoning: Load demo data and generate multi-model consensus and root cause reports.
+3. Digital Twin Sliders: Adjust production limits and solar ratios to see cost and emission changes.
+4. Defect Bounding Boxes: Upload a steel image to view defect bounding boxes.
+5. Conversational AI Assistant: Chat with the assistant using the context of active predictions.
+
+23. KNOWN LIMITATIONS
+---------------------
+* Background model fine-tuning requires an active Celery worker and Redis broker.
+* AutoML datasets are cached in memory and will be lost when the server restarts.
+* Telemetry RUL predictions only process the first row of uploaded CSV files.
+* Running YOLOv8 on standard host CPUs can result in high latency.
+* UI tooltips still mention Claude, but the backend calls Groq.
+
+24. FUTURE SCOPE
+----------------
+* Save uploaded datasets in SQLite to persist them across restarts.
+* Support live RTSP video feeds for real-time safety monitoring.
+* Integrate Optuna into the AutoML Studio to automate hyperparameter tuning.
+* Allow operators to correct bounding boxes and retrain models.
+* Save model inputs and predictions to the database to build historical dashboards.
+
+25. PROJECT VALUE
+-----------------
+* Reduces manual safety and defect auditing using computer vision.
+* Explains machine learning predictions in plain, non-technical language.
+* Allows operators to build custom tabular models and retrain defect detectors without code.
+* Fuses multiple model predictions into a single, cohesive report with clear action items.
+* Combines RUL predictions with anomaly alerts to catch machine failures before they happen.
+
+26. KEY CONTRIBUTIONS
+---------------------
+1. Multi-Model Decision Intelligence Layer: Fuses predictions from different models to resolve conflicts and output unified recommendations.
+2. AutoML Studio Leaderboard: Profiles CSVs, suggests features, and trains models in parallel.
+3. Local YOLOv8 ONNX Inference: Performs real-time inference on steel defects and safety gear compliance.
+4. XGBoost Telemetry Engine: Computes RUL predictions and machine alert probabilities.
+5. Digital Twin Simulation Sandbox: Simulates shift planning and carbon reductions, supporting Monte Carlo runs.
+
+27. REVIEW-MEETING SPEAKING POINTS
+----------------------------------
+* 30-Second Pitch: "Our Industry 4.0 AI Control Center is a unified operational dashboard that integrates visual computer vision (detecting steel surface defects and worker safety violations) with numerical telemetry analytics (energy consumption trends and machine remaining useful life). Unlike standard dashboards, it fuses outputs from multiple models into a single, cohesive report with clear root causes and recommended actions."
+* 1-Minute Pitch: "Our platform integrates computer vision (YOLOv8) and telemetry models (XGBoost, Random Forest) into a single operational interface. To make these models accessible to operators, we developed two key modules: an AutoML Studio that allows users to train custom models on CSV files, and a Fine-Tuning Studio to retrain defect detectors in the background. Finally, our Decision Intelligence layer aggregates findings from all models, checks them against rules, calculates a consensus agreement score, and translates raw metrics into clear, step-by-step recommendations."
+* 2-Minute Technical Pitch: "The backend is built on FastAPI and SQLite, with a Celery/Redis task queue to handle background model training. Visual tasks use YOLOv8 weights via ONNX Runtime or PyTorch, while telemetry tasks use XGBoost models. Telemetry data is normalized and scaled using StandardScalers and LabelEncoders before running inference. The results are passed to our custom Reasoning Layer, which runs rule checks, checks for consensus among models, and calculates confidence scores. This structured report is then summarized into a natural narrative by a Groq-hosted Llama-3.1-8b-instant model. To prevent backend bottlenecks, the AutoML Studio downsamples large datasets and trains models in parallel using thread pools."
+
+28. LIKELY REVIEW QUESTIONS & ANSWERS
+-------------------------------------
+* Q: How do you prevent Uvicorn port conflict crashes?
+  - Answer: We added a socket connection check in main.py that verifies port 8000 is open. If the port is occupied, it logs a warning message and exits gracefully.
+* Q: How does the frontend handle backend offline states?
+  - Answer: The useBackendStatus hook polls the health endpoint every 3 seconds. If the request fails, the status badge turns red and upload actions are disabled.
+* Q: How does the AutoML Studio train models in parallel?
+  - Answer: The backend splits the dataset, runs preprocessing, and trains the models in parallel threads using Python's ThreadPoolExecutor.
+* Q: What LLM provider is integrated, and how are API costs managed?
+  - Answer: We query the Groq API using the AsyncGroq client and the llama-3.1-8b-instant model. To minimize API costs, we cache responses in the SQLite model_cache table.
+
+29. CLAIM VERIFICATION
+----------------------
+* "Real-time YOLO Defect Detection" ──> VERIFIED (Safe to present, weights exist).
+* "Real-time YOLO PPE Compliance" ──> VERIFIED (Safe to present, weights exist).
+* "XGBoost Telemetry Predictions" ──> VERIFIED (Safe to present, models exist).
+* "Explainable AI Reasoning" ──> VERIFIED (Safe to present).
+* "AutoML Model Leaderboard" ──> VERIFIED (Safe to present).
+* "Production-Ready Fine-Tuning" ──> NOT FULLY VERIFIED (Requires Celery setup; present as experimental).
+* "Persistent User Accounts" ──> NOT IMPLEMENTED (Unsafe to claim).
+* "Real-time RTSP Video Streams" ──> NOT IMPLEMENTED (Unsafe to claim).
+
+30. EVIDENCE MAP
+----------------
+* Dashboard: Dashboard.tsx
+* AutoML Engine: ml_studio_service.py
+* Reasoning Engine: orchestrator.py
+* YOLO Defect Service: defect_service.py
+* YOLO PPE Service: ppe_service.py
+* Telemetry RUL Service: maintenance_service.py
+* Database Helpers: db.py
+* Digital Twin Simulator: scenario_engine.py
+
+31. PPT CONTENT MATERIAL
+------------------------
+* Slide 1: Title & Overview
+* Slide 2: Problem Statement
+* Slide 3: System Architecture
+* Slide 4: Real-Time Computer Vision
+* Slide 5: Telemetry Analytics
+* Slide 6: AutoML Studio
+* Slide 7: AI Decision Intelligence (Reasoning)
+* Slide 8: Digital Twin Simulator
+* Slide 9: Development Challenges
+* Slide 10: Current Status & Future Scope
+
+32. ONE-PAGE DOCUMENT MATERIAL
+------------------------------
+* Title: Industry 4.0 AI Control Center
+* Problem: Siloed visual and telemetry data streams lead to uncoordinated operational decisions.
+* Objective: Build a unified dashboard integrating computer vision, telemetry forecasting, digital twin simulations, and custom AutoML workspaces.
+* Solution: FastAPI/React platform using YOLOv8 for defects/PPE compliance, XGBoost for RUL, and scikit-learn for AutoML. Features a custom Reasoning AI layer that uses the Groq API to translate metrics into plain language.
+* Key Contributions: Custom multi-model Reasoning Layer, parallelized AutoML training engine, and local YOLOv8 ONNX inference integrations.
+
+33. FINAL EXECUTIVE SUMMARY
+---------------------------
+* Project in One Paragraph:
+  The Industry 4.0 AI Control Center is a unified operational control panel that integrates deep learning computer vision (steel defect detection and worker PPE compliance) with machine learning telemetry analytics (energy consumption trends and machine remaining useful life). Built on a React and FastAPI stack, the platform uses pre-trained YOLOv8 ONNX models for visual tasks and XGBoost models for telemetry tasks. It includes a physics-based Digital Twin simulator for Monte Carlo risk analysis, an AutoML Studio to train custom tabular models, and a Fine-Tuning Studio to retrain defect detectors. Finally, the platform features a custom Reasoning AI layer that evaluates rules, consensus scores, and root causes, using a Groq-hosted Llama-3.1-8b-instant model to translate metrics into natural language summaries and conversational chat.
+* Top 5 Features to Demonstrate:
+  1. AutoML Leaderboard: Upload a CSV, select target columns, run models, and compare metrics.
+  2. AI Reasoning: Load demo data and generate multi-model consensus and root cause reports.
+  3. Digital Twin Sliders: Adjust production limits and solar ratios to see cost and emission changes.
+  4. Defect Bounding Boxes: Upload a steel image to view defect bounding boxes.
+  5. Conversational AI Assistant: Chat with the assistant using the context of active predictions.
+* Top 5 Future Improvements:
+  1. Save uploaded datasets in SQLite to persist them across restarts.
+  2. Support live RTSP video feeds for real-time safety monitoring.
+  3. Integrate Optuna into the AutoML Studio to automate hyperparameter tuning.
+  4. Allow operators to correct bounding boxes and retrain models.
+  5. Save model inputs and predictions to the database.

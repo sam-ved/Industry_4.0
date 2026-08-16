@@ -65,8 +65,32 @@ def get_ppe_mock():
     if r.random() > 0.5: missing.append("Helmet")
     if r.random() > 0.5: missing.append("Vest")
     
+    compliance_status = "COMPLIANT" if not missing else "NON-COMPLIANT"
+    risk_level = "LOW" if not missing else "HIGH"
+    ppe_status_dict = {
+        "Helmet": "NOT DETECTED" if "Helmet" in missing else "DETECTED",
+        "Vest": "NOT DETECTED" if "Vest" in missing else "DETECTED",
+        "Gloves": "DETECTED"
+    }
+    
+    if compliance_status == "COMPLIANT":
+        reasoning = "All required PPE items were detected."
+    else:
+        items_str = " and ".join(missing) if len(missing) <= 2 else ", ".join(missing[:-1]) + ", and " + missing[-1]
+        verb = "were" if len(missing) > 1 else "was"
+        reasoning = f"{items_str} {verb} not detected. Worker should wear missing PPE before entering the monitored area."
+    
     return {
         "compliance_pct": round((compliant_count / total) * 100, 1),
+        "compliance_status": compliance_status,
+        "risk_level": risk_level,
+        "ppe_status_dict": ppe_status_dict,
+        "reasoning": reasoning,
+        "detected_items": ["Helmet", "Vest", "Gloves"] if not missing else [req for req in ["Helmet", "Vest", "Gloves"] if req not in missing],
+        "missing_items": missing,
+        "review_items": [],
+        "source": "mock",
+        "frame_compliant": compliance_status == "COMPLIANT",
         "equipment_detected": equipment_detected,
         "missing_equipment": missing,
         "processing_time_ms": r.randint(100, 500),

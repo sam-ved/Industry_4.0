@@ -35,8 +35,23 @@ export default function FeatureSelector({ data, config, setConfig }: FeatureSele
       const res = await mlStudioAPI.suggestFeatures(data.file_id, targetCol);
       if (res.data && !res.data.error) {
         setSuggestions(res.data);
-        const topFeats = res.data.top_features.map((f: any) => f.feature);
-        setConfig((current: any) => ({ ...current, features: topFeats }));
+        
+        // Remove target column from auto-selected features
+        let topFeats = res.data.top_features.map((f: any) => f.feature);
+        if (targetCol) {
+          topFeats = topFeats.filter((f: string) => f !== targetCol);
+        }
+        
+        setConfig((current: any) => {
+          const targetType = res.data.target_type || current.taskType;
+          return {
+            ...current,
+            features: topFeats,
+            taskType: targetType,
+            // If algorithm is not set, set it to 'auto' so that validation passes
+            algorithm: current.algorithm || 'auto'
+          };
+        });
       }
     } catch (e) {
       console.error(e);
@@ -228,8 +243,7 @@ export default function FeatureSelector({ data, config, setConfig }: FeatureSele
               <div>
                 <p className="text-xs text-[#10B981] font-semibold mb-0.5">Auto-Detected</p>
                 <p className="text-[11px] text-[#10B981] opacity-80 leading-relaxed">
-                  Detected as a <span className="font-semibold">{suggestions.target_type}</span> task.
-                  Top {suggestions.top_features?.length} features pre-selected by correlation.
+                  Regression task detected. Top candidate features selected using target association and data-quality checks.
                 </p>
               </div>
             </div>

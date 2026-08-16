@@ -7,7 +7,9 @@ import {
   Bell, Cpu, Radio, RefreshCw, WifiOff, Beaker
 } from 'lucide-react'
 import BackgroundGlow from '../components/common/BackgroundGlow'
+import Footer from '../components/common/Footer'
 import { useDashboard } from '../hooks/useDashboard'
+import { useDocumentMeta } from '../hooks/useDocumentMeta'
 
 // ─── Animation Variants ──────────────────────────────────────────────────────
 
@@ -256,6 +258,7 @@ function InsightsPanel({ insights, llmHealth, loading, systemError }: any) {
 export default function Dashboard() {
   const navigate = useNavigate()
   const { kpis, insights, llmHealth, loading, error, refresh } = useDashboard()
+  useDocumentMeta('Dashboard', 'Real-time AI-powered industrial monitoring dashboard with KPIs, defect detection, PPE compliance, energy analytics, and predictive maintenance.')
 
   const accentMap = {
     cyan:    { text: '#06B6D4', border: 'rgba(6,182,212,0.25)',  bg: 'rgba(6,182,212,0.08)',  glow: 'rgba(6,182,212,0.15)' },
@@ -356,6 +359,16 @@ export default function Dashboard() {
       path: '/ml-studio',
       metric: 'Ready',
       metricLabel: 'to train',
+    },
+    {
+      icon: Zap,
+      title: 'Simulation & Digital Twin',
+      description: 'Run what-if production scenarios and optimize energy, costs, and emissions.',
+      accent: 'emerald',
+      status: 'Active',
+      path: '/simulation',
+      metric: 'Live',
+      metricLabel: 'digital twin',
     },
   ]
 
@@ -558,6 +571,8 @@ export default function Dashboard() {
         </motion.div>
 
       </div>
+
+      <Footer />
     </div>
   )
 }

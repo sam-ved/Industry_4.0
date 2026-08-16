@@ -5,7 +5,7 @@ const cardMotion = {
   visible: { opacity: 1, y: 0 },
 }
 
-export default function Card({ children, className = '', ...props }) {
+export function Card({ children, className = '', ...props }: any) {
   return (
     <motion.div
       initial="hidden"
@@ -17,5 +17,31 @@ export default function Card({ children, className = '', ...props }) {
     >
       {children}
     </motion.div>
+  )
+}
+
+export default Card;
+
+export function CardHeader({ children, className = '', ...props }: any) {
+  return (
+    <div className={`flex flex-col space-y-1.5 p-6 ${className}`} {...props}>
+      {children}
+    </div>
+  )
+}
+
+export function CardTitle({ children, className = '', ...props }: any) {
+  return (
+    <h3 className={`font-semibold leading-none tracking-tight ${className}`} {...props}>
+      {children}
+    </h3>
+  )
+}
+
+export function CardContent({ children, className = '', ...props }: any) {
+  return (
+    <div className={`p-6 pt-0 ${className}`} {...props}>
+      {children}
+    </div>
   )
 }

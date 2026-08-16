@@ -1,4 +1,3 @@
-import React from 'react'
 import { Info, Search, AlertTriangle, CheckCircle, TrendingUp, Sparkles, Loader2 } from 'lucide-react'
 
 interface AIInsightsProps {

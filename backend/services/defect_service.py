@@ -13,17 +13,25 @@ def _load_model():
     global _model
     if _model is not None:
         return _model
-    model_path = os.path.join("models", "best.pt")
-    if not os.path.exists(model_path):
+        
+    onnx_path = os.path.join("models", "best.onnx")
+    pt_path = os.path.join("models", "best.pt")
+    
+    if os.path.exists(onnx_path):
+        model_path = onnx_path
+    elif os.path.exists(pt_path):
+        model_path = pt_path
+    else:
         print(
             "[DefectService] No model file found at models/best.pt "
             "— using mock data."
         )
         return None
+        
     try:
         from ultralytics import YOLO  # type: ignore
-        _model = YOLO(model_path)
-        print("[DefectService] YOLOv8 model loaded successfully.")
+        _model = YOLO(model_path, task='detect')
+        print(f"[DefectService] YOLOv8 model loaded successfully from {model_path}.")
         return _model
     except Exception as e:
         print(f"[DefectService] Failed to load YOLO: {e}")
@@ -47,8 +55,8 @@ def run_defect_detection(image_bytes: bytes | None = None) -> dict:
             img = transposed
         img = img.convert("RGB")
         img_width, img_height = img.size
-        img_array = np.array(img)
-        results = model(img_array, verbose=False)[0]
+        # Pass PIL image directly to YOLO to handle RGB->BGR correctly
+        results = model(img, conf=0.25, verbose=False)[0]
 
         defects = []
         for box in results.boxes:

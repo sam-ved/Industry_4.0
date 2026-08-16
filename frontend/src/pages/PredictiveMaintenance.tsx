@@ -13,15 +13,14 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-import { llmAPI, maintenanceAPI } from '../services/api'
+import { maintenanceAPI } from '../services/api'
 import { useBackendStatus } from '../hooks/useBackendStatus'
 import ModelInputHandler from '../components/ModelInputHandler'
 import BackgroundGlow from '../components/common/BackgroundGlow'
 import AIInsightsPanel from '../components/common/AIInsightsPanel'
 import AIChatDrawer from '../components/common/AIChatDrawer'
 import { Bot } from 'lucide-react'
-import { useEffect } from 'react'
-
+import { useDocumentMeta } from '../hooks/useDocumentMeta'
 interface MaintenanceResult {
   failure_risk: number
   days_until_failure: number
@@ -29,6 +28,7 @@ interface MaintenanceResult {
     name: string
     risk_score: number
     recommended_action: string
+    reasoning?: string
   }>
   maintenance_schedule: Array<{
     component: string
@@ -36,7 +36,7 @@ interface MaintenanceResult {
     priority: 'critical' | 'high' | 'medium' | 'low'
   }>
   health_status: 'healthy' | 'warning' | 'critical'
-  llm_insights?: string
+  llm_insights?: any
 }
 
 const COLORS = {
@@ -55,30 +55,8 @@ export default function PredictiveMaintenance() {
   const [results, setResults] = useState<MaintenanceResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const [insights, setInsights] = useState(null)
-  const [insightsLoading, setInsightsLoading] = useState(false)
-  const [insightsError, setInsightsError] = useState('')
   const [isChatOpen, setIsChatOpen] = useState(false)
-
-  useEffect(() => {
-    if (results) {
-      const fetchInsights = async () => {
-        setInsightsLoading(true)
-        setInsightsError('')
-        try {
-          const res = await llmAPI.explain('maintenance', results as unknown as Record<string, unknown>)
-          setInsights(res.explanation)
-        } catch (err) {
-          setInsightsError('Failed to load AI Insights.')
-        } finally {
-          setInsightsLoading(false)
-        }
-      }
-      fetchInsights()
-    } else {
-      setInsights(null)
-    }
-  }, [results])
+  useDocumentMeta('Predictive Maintenance', 'ML-based equipment failure prediction with risk assessment, maintenance scheduling, and component health monitoring.')
 
   const handleFileSelect = (file: File) => {
     setSelectedFile(file)
@@ -101,8 +79,12 @@ export default function PredictiveMaintenance() {
     setError(null)
 
     try {
-      const data = await maintenanceAPI.analyze(selectedFile)
-      setResults(data.data || data)
+      const response = await maintenanceAPI.analyze(selectedFile)
+      const resultData = response.data || response
+      if (response.llm_insights) {
+        resultData.llm_insights = response.llm_insights
+      }
+      setResults(resultData)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to analyze'
       setError(message)
@@ -251,7 +233,7 @@ export default function PredictiveMaintenance() {
                       </p>
                       <div className="mt-3 w-full bg-slate-800 rounded-full h-2 overflow-hidden">
                         <div
-                          // eslint-disable-next-line @stylistic/no-restricted-syntax
+
                           className="bg-red-500 h-full transition-all duration-500"
                           style={{ width: `${results.failure_risk * 100}%` }}
                         />
@@ -324,7 +306,7 @@ export default function PredictiveMaintenance() {
                             <div className="flex items-center justify-between mb-2">
                               <span className="font-medium">{comp.name}</span>
                               <span
-                                // eslint-disable-next-line @stylistic/no-restricted-syntax
+
                                 className="px-2 py-0.5 rounded text-xs font-medium"
                                 style={{
                                   background: `${COLORS[comp.risk_score > 0.7 ? 'critical' : comp.risk_score > 0.5 ? 'high' : comp.risk_score > 0.3 ? 'medium' : 'low']}33`,
@@ -335,6 +317,11 @@ export default function PredictiveMaintenance() {
                               </span>
                             </div>
                             <p className="text-xs text-slate-400">{comp.recommended_action}</p>
+                            {comp.reasoning && (
+                              <div className="mt-2 text-xs text-cyan-200/80 italic border-l-2 border-cyan-500/50 pl-2">
+                                {comp.reasoning}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -357,7 +344,7 @@ export default function PredictiveMaintenance() {
                             <p className="text-xs text-slate-500">{item.due_date}</p>
                           </div>
                           <span
-                            // eslint-disable-next-line @stylistic/no-restricted-syntax
+
                             className="px-2 py-1 rounded text-xs font-medium"
                             style={{
                               background: `${COLORS[item.priority]}33`,
@@ -395,9 +382,9 @@ export default function PredictiveMaintenance() {
                 </div>
 
                 <AIInsightsPanel 
-                  isLoading={insightsLoading} 
-                  insights={insights} 
-                  error={insightsError} 
+                  isLoading={isLoading} 
+                  insights={results.llm_insights} 
+                  error={error || ''} 
                 />
 
                 <AIChatDrawer 

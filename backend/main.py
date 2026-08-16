@@ -9,16 +9,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from datetime import datetime
 
-from backend.routers import defect, ppe, energy, maintenance, llm, models, ml_studio
+load_dotenv()
+print("Groq Key Loaded:", bool(os.getenv("GROQ_API_KEY")))
+
+from backend.api.routes import defect, ppe, energy, maintenance, llm, models, ml_studio, datasets, detection_config, fine_tune, model_registry, parametrized_inference, automl, reasoning, reports, simulation_routes
 from backend.database import init_db
 from backend.services.defect_service import run_defect_detection
 from backend.services.ppe_service import run_ppe_detection
 from backend.services.energy_service import run_energy_analytics
 from backend.services.maintenance_service import run_maintenance_analytics
 from backend.utils.mock_data import get_dashboard_summary
+from backend.api.middleware.logging_middleware import LoggingAndTraceMiddleware
+from backend.schemas.responses import StandardResponse
 
-load_dotenv()
-print("Gemini Key Loaded:", bool(os.getenv("GEMINI_API_KEY")))
 # Initialize database
 init_db()
 
@@ -28,7 +31,8 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# ── CORS ──────────────────────────────────────────────────────────────────────
+# ── Middleware ────────────────────────────────────────────────────────────────
+app.add_middleware(LoggingAndTraceMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -50,19 +54,58 @@ app.include_router(maintenance.router)
 app.include_router(llm.router)
 app.include_router(models.router)
 app.include_router(ml_studio.router)
+app.include_router(datasets.router)
+app.include_router(detection_config.router)
+app.include_router(fine_tune.router)
+app.include_router(model_registry.router)
+app.include_router(parametrized_inference.router)
+app.include_router(automl.router)
+app.include_router(reasoning.router)
+app.include_router(reports.router)
+app.include_router(simulation_routes.router)
 
 
-@app.get("/")
+@app.get("/", response_model=StandardResponse)
 async def root():
-    return {"message": "Industry 4.0 AI Backend running", "docs": "/docs"}
+    return StandardResponse(
+        status="success",
+        message="Industry 4.0 AI Backend running",
+        data={"docs": "/docs"}
+    )
 
 
-@app.get("/health")
+@app.get("/health", response_model=StandardResponse)
 async def health():
-    return {
-        "status": "online",
-        "timestamp": datetime.utcnow().isoformat()
-    }
+    return StandardResponse(
+        status="success",
+        message="Backend is online",
+        data={"status": "online", "timestamp": datetime.utcnow().isoformat()}
+    )
+
+
+@app.get("/readiness", response_model=StandardResponse)
+async def readiness():
+    # TODO: Add actual database/redis readiness check
+    return StandardResponse(
+        status="success",
+        message="Backend is ready to accept requests",
+        data={"ready": True}
+    )
+
+
+@app.get("/metrics", response_model=StandardResponse)
+async def metrics():
+    import psutil
+    process = psutil.Process()
+    return StandardResponse(
+        status="success",
+        message="System metrics retrieved",
+        data={
+            "cpu_percent": psutil.cpu_percent(),
+            "ram_used_mb": process.memory_info().rss / (1024 * 1024),
+            "threads": process.num_threads()
+        }
+    )
 
 
 @app.get("/dashboard/summary")
@@ -77,16 +120,16 @@ async def dashboard_summary():
     return {"status": "ok", "data": summary}
 
 
-@app.get("/test-gemini")
-async def test_gemini():
+@app.get("/test-groq")
+async def test_groq():
     try:
-        from google import genai
-        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-        response = await client.aio.models.generate_content(
-            model="gemini-2.5-flash",
-            contents="Analyze a PPE compliance issue where a worker is wearing a vest but not wearing a helmet."
+        from groq import AsyncGroq
+        client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
+        response = await client.chat.completions.create(
+            messages=[{"role": "user", "content": "Analyze a PPE compliance issue where a worker is wearing a vest but not wearing a helmet."}],
+            model="llama-3.1-8b-instant"
         )
-        return {"success": True, "response": (response.text or "").strip()}
+        return {"success": True, "response": (response.choices[0].message.content or "").strip()}
     except Exception as e:
         return {"success": False, "error": str(e)}
 

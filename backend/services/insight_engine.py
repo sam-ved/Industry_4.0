@@ -1,11 +1,12 @@
 from typing import Dict, Any, List
+from backend.analytics.analyzer import generate_industrial_intelligence
 
 class InsightEngine:
     @staticmethod
     def generate_report(results: Dict[str, Any]) -> Dict[str, Any]:
         """
         Generates a structured insight report based on ML results.
-        Designed to be easily replaceable by an LLM in the future.
+        Now integrates the Enterprise Analytics Engine.
         """
         executive_summary = ""
         key_findings = []
@@ -138,10 +139,21 @@ class InsightEngine:
             recommendations.append("Review the charts to understand feature distributions better.")
             recommendations.append("Consider testing alternative algorithms to compare performance.")
 
+        # --- Analytics Engine Integration ---
+        predictions = []
+        if task_type == "anomaly":
+            predictions.append({"class": "anomaly", "severity": "high", "confidence": 0.9})
+        else:
+            acc = metrics.get("accuracy", 0.8) if metrics else 0.8
+            predictions.append({"class": task_type, "severity": "medium", "confidence": acc})
+            
+        advanced_analytics = generate_industrial_intelligence(predictions, context=results)
+        
         return {
             "executive_summary": executive_summary,
             "key_findings": key_findings,
             "risk_indicators": risk_indicators,
             "recommendations": recommendations,
-            "model_interpretation": model_interpretation
+            "model_interpretation": model_interpretation,
+            "advanced_analytics": advanced_analytics
         }
